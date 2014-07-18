@@ -74,3 +74,32 @@ func TestTimingOutTripsBreaker(t *testing.T) {
 		t.Fatal("Expected circuit to be broken")
 	}
 }
+
+func TestBreakerResets(t *testing.T) {
+	called := 0
+	success := false
+	circuit := func(...interface{}) error {
+		if called == 0 {
+			called += 1
+			return fmt.Errorf("error")
+		}
+		success = true
+		return nil
+	}
+
+	cb := NewCircuitBreaker(1, 1, circuit)
+	err := cb.Call()
+	if err == nil {
+		t.Fatal("Expected cb to return an error")
+	}
+
+	time.Sleep(time.Millisecond * 500)
+	err = cb.Call()
+	if err != nil {
+		t.Fatal("Expected cb to be successful")
+	}
+
+	if !success {
+		t.Fatal("Expected cb to have been reset")
+	}
+}

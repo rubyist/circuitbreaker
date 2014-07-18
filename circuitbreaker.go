@@ -6,18 +6,21 @@ import (
 )
 
 type CircuitBreaker struct {
-	Timeout   int
-	Threshold int
-	failures  int
-	cb        circuit
+	Timeout      int
+	Threshold    int
+	ResetTimeout time.Duration
+	failures     int
+	cb           circuit
+	lastFailure  time.Time
 }
 
 type circuit func(...interface{}) error
 type state int
 
 const (
-	open   state = iota
-	closed state = iota
+	open      state = iota
+	half_open state = iota
+	closed    state = iota
 )
 
 var (
@@ -26,7 +29,11 @@ var (
 )
 
 func NewCircuitBreaker(timeout, threshold int, circuit circuit) *CircuitBreaker {
-	return &CircuitBreaker{Timeout: timeout, Threshold: threshold, failures: 0, cb: circuit}
+	return &CircuitBreaker{
+		Timeout:      timeout,
+		Threshold:    threshold,
+		ResetTimeout: time.Millisecond * 500,
+		cb:           circuit}
 }
 
 func (cb *CircuitBreaker) Call() error {
@@ -44,10 +51,12 @@ func (cb *CircuitBreaker) Call() error {
 	case <-c:
 		if err != nil {
 			cb.failures += 1
+			cb.lastFailure = time.Now()
 			return err
 		}
 	case <-time.After(time.Second * 2):
 		cb.failures += 1
+		cb.lastFailure = time.Now()
 		return BreakerTimeout
 	}
 
@@ -57,6 +66,10 @@ func (cb *CircuitBreaker) Call() error {
 
 func (cb *CircuitBreaker) state() state {
 	if cb.failures >= cb.Threshold {
+		since := time.Since(cb.lastFailure)
+		if since > cb.ResetTimeout {
+			return half_open
+		}
 		return open
 	}
 	return closed
