@@ -9,7 +9,6 @@ type CircuitBreaker struct {
 	Timeout   int
 	Threshold int
 	failures  int
-	state     state
 	cb        circuit
 }
 
@@ -27,16 +26,11 @@ var (
 )
 
 func NewCircuitBreaker(timeout, threshold int, circuit circuit) *CircuitBreaker {
-	return &CircuitBreaker{Timeout: timeout, Threshold: threshold, failures: 0, state: closed, cb: circuit}
+	return &CircuitBreaker{Timeout: timeout, Threshold: threshold, failures: 0, cb: circuit}
 }
 
 func (cb *CircuitBreaker) Call() error {
-	if cb.state == open {
-		return BreakerOpen
-	}
-
-	if cb.failures >= cb.Threshold {
-		cb.state = closed
+	if cb.state() == open {
 		return BreakerOpen
 	}
 
@@ -59,4 +53,11 @@ func (cb *CircuitBreaker) Call() error {
 
 	cb.failures = 0
 	return nil
+}
+
+func (cb *CircuitBreaker) state() state {
+	if cb.failures >= cb.Threshold {
+		return open
+	}
+	return closed
 }
