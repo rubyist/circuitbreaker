@@ -43,7 +43,7 @@ cb.BreakerClosed = func(c *CircuitBreaker) {
 	// from open to closed, passing in the circuit breaker object
 }
 
-cb.Call(func(...interface{}) error {
+cb.Call(func() error {
 	// This is where you'll do some remote call
 	// If it fails, return an error
 })

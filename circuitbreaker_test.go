@@ -10,7 +10,7 @@ func TestCallsTheCircuit(t *testing.T) {
 	called := false
 
 	cb := NewCircuitBreaker(1)
-	err := cb.Call(func(...interface{}) error {
+	err := cb.Call(func() error {
 		called = true
 		return nil
 	})
@@ -27,7 +27,7 @@ func TestCallsTheCircuit(t *testing.T) {
 func TestPassingThresholdTripsBreaker(t *testing.T) {
 	called := 0
 
-	circuit := func(...interface{}) error {
+	circuit := func() error {
 		if called >= 2 {
 			return fmt.Errorf("error")
 		}
@@ -57,7 +57,7 @@ func TestPassingThresholdTripsBreaker(t *testing.T) {
 
 func TestTimingOutTripsBreaker(t *testing.T) {
 	called := 0
-	circuit := func(...interface{}) error {
+	circuit := func() error {
 		called += 1
 		time.Sleep(time.Second * 2)
 		return nil
@@ -78,7 +78,7 @@ func TestTimingOutTripsBreaker(t *testing.T) {
 func TestBreakerResets(t *testing.T) {
 	called := 0
 	success := false
-	circuit := func(...interface{}) error {
+	circuit := func() error {
 		if called == 0 {
 			called += 1
 			return fmt.Errorf("error")
@@ -107,7 +107,7 @@ func TestBreakerResets(t *testing.T) {
 func TestBreakerOpenCalledWhenBreakerOpens(t *testing.T) {
 	openCalled := false
 
-	circuit := func(...interface{}) error {
+	circuit := func() error {
 		return fmt.Errorf("error")
 	}
 	cb := NewCircuitBreaker(1)
@@ -124,7 +124,7 @@ func TestBreakerOpenCalledWhenBreakerOpens(t *testing.T) {
 func TestBreakerOpenOnlyCalledOnce(t *testing.T) {
 	openCalled := 0
 
-	circuit := func(...interface{}) error {
+	circuit := func() error {
 		return fmt.Errorf("error")
 	}
 
@@ -144,7 +144,7 @@ func TestBreakerOpenOnlyCalledOnce(t *testing.T) {
 func TestBreakerOpenHandlesResets(t *testing.T) {
 	called := 0
 	openCalled := 0
-	circuit := func(...interface{}) error {
+	circuit := func() error {
 		if called == 0 || called == 2 {
 			called += 1
 			return fmt.Errorf("error")
@@ -171,7 +171,7 @@ func TestBreakerOpenHandlesResets(t *testing.T) {
 func TestBreakerClosedCallsWhenBreakerClosed(t *testing.T) {
 	called := 0
 	closedCalled := 0
-	circuit := func(...interface{}) error {
+	circuit := func() error {
 		if called == 0 {
 			called += 1
 			return fmt.Errorf("error")

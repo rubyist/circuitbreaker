@@ -17,7 +17,7 @@ type CircuitBreaker struct {
 	halfOpens     int
 }
 
-type circuit func(...interface{}) error
+type circuit func() error
 type state int
 
 const (
