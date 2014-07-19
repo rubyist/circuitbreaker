@@ -47,11 +47,13 @@ func (cb *CircuitBreaker) Call(circuit circuit) error {
 		return BreakerOpen
 	}
 
+	var err error
 	if cb.Timeout > 0 {
-		return cb.callWithTimeout(circuit)
+		err = cb.callWithTimeout(circuit)
+	} else {
+		err = circuit()
 	}
 
-	err := circuit()
 	if err != nil {
 		cb.failures += 1
 		cb.lastFailure = time.Now()
@@ -76,24 +78,14 @@ func (cb *CircuitBreaker) callWithTimeout(circuit circuit) error {
 	var err error
 	go func() {
 		err = circuit()
-		c <- 1
+		close(c)
 	}()
 	select {
 	case <-c:
-		if err != nil {
-			cb.failures += 1
-			cb.lastFailure = time.Now()
-			return err
-		}
+		return err
 	case <-time.After(time.Second * time.Duration(cb.Timeout)):
-		cb.failures += 1
-		cb.lastFailure = time.Now()
 		return BreakerTimeout
 	}
-
-	cb.failures = 0
-	cb.halfOpens = 0
-	return nil
 }
 
 func (cb *CircuitBreaker) state() state {
