@@ -6,14 +6,15 @@ import (
 )
 
 type CircuitBreaker struct {
-	Timeout      int
-	Threshold    int
-	ResetTimeout time.Duration
-	BreakerOpen  func(*CircuitBreaker, error)
-	failures     int
-	lastFailure  time.Time
-	halfOpenGate int
-	halfOpens    int
+	Timeout       int
+	Threshold     int
+	ResetTimeout  time.Duration
+	BreakerOpen   func(*CircuitBreaker, error)
+	BreakerClosed func(*CircuitBreaker)
+	failures      int
+	lastFailure   time.Time
+	halfOpenGate  int
+	halfOpens     int
 }
 
 type circuit func(...interface{}) error
@@ -59,6 +60,10 @@ func (cb *CircuitBreaker) Call(circuit circuit) error {
 			cb.BreakerOpen(cb, err)
 		}
 		return err
+	}
+
+	if cb.BreakerClosed != nil && cb.failures > 0 {
+		cb.BreakerClosed(cb)
 	}
 
 	cb.failures = 0

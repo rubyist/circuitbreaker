@@ -167,3 +167,29 @@ func TestBreakerOpenHandlesResets(t *testing.T) {
 		t.Fatal("Expected BreakerOpen to fire again after a reset")
 	}
 }
+
+func TestBreakerClosedCallsWhenBreakerClosed(t *testing.T) {
+	called := 0
+	closedCalled := 0
+	circuit := func(...interface{}) error {
+		if called == 0 {
+			called += 1
+			return fmt.Errorf("error")
+		}
+		return nil
+	}
+
+	cb := NewCircuitBreaker(1)
+	cb.BreakerClosed = func(cb *CircuitBreaker) {
+		closedCalled += 1
+	}
+
+	cb.Call(circuit)
+	time.Sleep(time.Millisecond * 500)
+	cb.Call(circuit) // Resets
+
+	if closedCalled != 1 {
+		t.Fatal("Expected BreakerClosed to fire on reset")
+	}
+
+}
