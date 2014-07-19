@@ -13,7 +13,6 @@ type CircuitBreaker struct {
 	BreakerClosed func(*CircuitBreaker)
 	failures      int
 	lastFailure   time.Time
-	halfOpenGate  int
 	halfOpens     int
 }
 
@@ -97,7 +96,7 @@ func (cb *CircuitBreaker) state() state {
 	if cb.failures >= cb.Threshold {
 		since := time.Since(cb.lastFailure)
 		if since > cb.ResetTimeout {
-			if cb.halfOpens <= cb.halfOpenGate {
+			if cb.halfOpens == 0 {
 				cb.halfOpens += 1
 				return half_open
 			} else {
