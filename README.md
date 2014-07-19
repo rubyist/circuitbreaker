@@ -54,9 +54,27 @@ Circuitbreaker can also wrap a timeout around the remote call.
 ```go
 // Creates a circuit breaker that will trip after 10 failures or timeouts
 // using a time out of 5 seconds
-cb := NewTimeoutCircuitBreaker(10, 5)
+cb := NewTimeoutCircuitBreaker(5, 10)
 
 // Proceed as above
+
+```
+
+Circuitbreaker also provides an wrapper around `http.Client` that will wrap a
+time out around any request.
+
+```go
+  // Passing in nil will create a regular http.Client.
+  // You can also build your own http.Client and pass it in
+	client := circuitbreaker.NewCircuitBreakerClient(5, 10, nil)
+	client.BreakerOpen = func(err error) {
+    // Perhaps notify your monitoring system
+	}
+	client.BreakerClosed = func() {
+    // Perhaps notify your monitoring system
+	}
+
+  resp, err := client.Get("http://example.com/resource.json")
 
 ```
 

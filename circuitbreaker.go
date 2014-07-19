@@ -43,7 +43,9 @@ func NewTimeoutCircuitBreaker(timeout, threshold int) *CircuitBreaker {
 }
 
 func (cb *CircuitBreaker) Call(circuit circuit) error {
-	if cb.state() == open {
+	state := cb.state()
+
+	if state == open {
 		return BreakerOpen
 	}
 
@@ -55,10 +57,13 @@ func (cb *CircuitBreaker) Call(circuit circuit) error {
 	}
 
 	if err != nil {
+		if state == half_open {
+			cb.halfOpens = 0
+		}
 		cb.failures += 1
 		cb.lastFailure = time.Now()
 
-		if cb.BreakerOpen != nil && cb.state() == open {
+		if cb.BreakerOpen != nil && cb.failures == cb.Threshold {
 			cb.BreakerOpen(cb, err)
 		}
 		return err
