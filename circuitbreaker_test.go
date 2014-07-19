@@ -103,3 +103,67 @@ func TestBreakerResets(t *testing.T) {
 		t.Fatal("Expected cb to have been reset")
 	}
 }
+
+func TestBreakerOpenCalledWhenBreakerOpens(t *testing.T) {
+	openCalled := false
+
+	circuit := func(...interface{}) error {
+		return fmt.Errorf("error")
+	}
+	cb := NewCircuitBreaker(1)
+	cb.BreakerOpen = func(cb *CircuitBreaker, err error) {
+		openCalled = true
+	}
+
+	cb.Call(circuit)
+	if !openCalled {
+		t.Fatal("Expected BreakerOpen to have been called")
+	}
+}
+
+func TestBreakerOpenOnlyCalledOnce(t *testing.T) {
+	openCalled := 0
+
+	circuit := func(...interface{}) error {
+		return fmt.Errorf("error")
+	}
+
+	cb := NewCircuitBreaker(1)
+	cb.BreakerOpen = func(cb *CircuitBreaker, err error) {
+		openCalled += 1
+	}
+
+	cb.Call(circuit)
+	cb.Call(circuit)
+
+	if openCalled != 1 {
+		t.Fatalf("Expected BreakerOpen to have been called once, got %d", openCalled)
+	}
+}
+
+func TestBreakerOpenHandlesResets(t *testing.T) {
+	called := 0
+	openCalled := 0
+	circuit := func(...interface{}) error {
+		if called == 0 || called == 2 {
+			called += 1
+			return fmt.Errorf("error")
+		}
+		called += 1
+		return nil
+	}
+
+	cb := NewCircuitBreaker(1)
+	cb.BreakerOpen = func(cb *CircuitBreaker, err error) {
+		openCalled += 1
+	}
+
+	cb.Call(circuit) // Trip
+	time.Sleep(time.Millisecond * 500)
+	cb.Call(circuit) // Resets
+	cb.Call(circuit) // Trip again
+
+	if openCalled != 2 {
+		t.Fatal("Expected BreakerOpen to fire again after a reset")
+	}
+}

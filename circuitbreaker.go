@@ -9,6 +9,7 @@ type CircuitBreaker struct {
 	Timeout      int
 	Threshold    int
 	ResetTimeout time.Duration
+	BreakerOpen  func(*CircuitBreaker, error)
 	failures     int
 	lastFailure  time.Time
 	halfOpenGate int
@@ -53,6 +54,10 @@ func (cb *CircuitBreaker) Call(circuit circuit) error {
 	if err != nil {
 		cb.failures += 1
 		cb.lastFailure = time.Now()
+
+		if cb.BreakerOpen != nil && cb.state() == open {
+			cb.BreakerOpen(cb, err)
+		}
 		return err
 	}
 
