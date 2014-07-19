@@ -9,13 +9,12 @@ import (
 func TestCallsTheCircuit(t *testing.T) {
 	called := false
 
-	circuit := func(...interface{}) error {
+	cb := NewCircuitBreaker(1)
+	err := cb.Call(func(...interface{}) error {
 		called = true
 		return nil
-	}
+	})
 
-	cb := NewCircuitBreaker(1, 1, circuit)
-	err := cb.Call()
 	if err != nil {
 		t.Fatalf("Error calling circuit: %s", err)
 	}
@@ -36,16 +35,17 @@ func TestPassingThresholdTripsBreaker(t *testing.T) {
 		return nil
 	}
 
-	cb := NewCircuitBreaker(1, 2, circuit)
-	err := cb.Call()
+	cb := NewCircuitBreaker(2)
+	err := cb.Call(circuit)
+
 	if err != nil {
 		t.Fatalf("Error calling circuit: %s", err)
 	}
-	err = cb.Call()
+	err = cb.Call(circuit)
 	if err != nil {
 		t.Fatalf("Error calling circuit: %s", err)
 	}
-	err = cb.Call()
+	err = cb.Call(circuit)
 	if err == nil {
 		t.Fatal("Expected error calling circuit")
 	}
@@ -63,13 +63,13 @@ func TestTimingOutTripsBreaker(t *testing.T) {
 		return nil
 	}
 
-	cb := NewCircuitBreaker(1, 1, circuit)
-	err := cb.Call()
+	cb := NewTimeoutCircuitBreaker(1, 1)
+	err := cb.Call(circuit)
 	if err == nil {
 		t.Fatal("Expected cb to return an error")
 	}
 
-	cb.Call()
+	cb.Call(circuit)
 	if called != 1 {
 		t.Fatal("Expected circuit to be broken")
 	}
@@ -87,14 +87,14 @@ func TestBreakerResets(t *testing.T) {
 		return nil
 	}
 
-	cb := NewCircuitBreaker(1, 1, circuit)
-	err := cb.Call()
+	cb := NewCircuitBreaker(1)
+	err := cb.Call(circuit)
 	if err == nil {
 		t.Fatal("Expected cb to return an error")
 	}
 
 	time.Sleep(time.Millisecond * 500)
-	err = cb.Call()
+	err = cb.Call(circuit)
 	if err != nil {
 		t.Fatal("Expected cb to be successful")
 	}
