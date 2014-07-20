@@ -49,18 +49,18 @@ cb.Call(func() error {
 })
 ```
 
-Circuitbreaker can also wrap a timeout around the remote call.
+Circuitbreaker can also wrap a time out around the remote call.
 
 ```go
-// Creates a circuit breaker that will trip after 10 failures or timeouts
+// Creates a circuit breaker that will trip after 10 failures or time outs
 // using a time out of 5 seconds
-cb := NewTimeoutCircuitBreaker(5, 10)
+cb := Newtime outCircuitBreaker(5, 10)
 
 // Proceed as above
 
 ```
 
-Circuitbreaker also provides an wrapper around `http.Client` that will wrap a
+Circuitbreaker also provides a wrapper around `http.Client` that will wrap a
 time out around any request.
 
 ```go

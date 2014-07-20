@@ -27,7 +27,7 @@ const (
 
 var (
 	BreakerOpen    = errors.New("breaker open")
-	BreakerTimeout = errors.New("breaker timeout")
+	BreakerTimeout = errors.New("breaker time out")
 )
 
 func NewCircuitBreaker(threshold int) *CircuitBreaker {
