@@ -54,7 +54,7 @@ Circuitbreaker can also wrap a time out around the remote call.
 ```go
 // Creates a circuit breaker that will trip after 10 failures or time outs
 // using a time out of 5 seconds
-cb := Newtime outCircuitBreaker(5, 10)
+cb := NewtimeoutCircuitBreaker(5, 10)
 
 // Proceed as above
 
