@@ -31,7 +31,7 @@ func TestPassingThresholdTripsBreaker(t *testing.T) {
 		if called >= 2 {
 			return fmt.Errorf("error")
 		}
-		called += 1
+		called++
 		return nil
 	}
 
@@ -58,7 +58,7 @@ func TestPassingThresholdTripsBreaker(t *testing.T) {
 func TestTimingOutTripsBreaker(t *testing.T) {
 	called := 0
 	circuit := func() error {
-		called += 1
+		called++
 		time.Sleep(time.Second * 2)
 		return nil
 	}
@@ -80,7 +80,7 @@ func TestBreakerResets(t *testing.T) {
 	success := false
 	circuit := func() error {
 		if called == 0 {
-			called += 1
+			called++
 			return fmt.Errorf("error")
 		}
 		success = true
@@ -130,7 +130,7 @@ func TestBreakerOpenOnlyCalledOnce(t *testing.T) {
 
 	cb := NewCircuitBreaker(1)
 	cb.BreakerOpen = func(cb *CircuitBreaker, err error) {
-		openCalled += 1
+		openCalled++
 	}
 
 	cb.Call(circuit)
@@ -146,16 +146,16 @@ func TestBreakerOpenHandlesResets(t *testing.T) {
 	openCalled := 0
 	circuit := func() error {
 		if called == 0 || called == 2 {
-			called += 1
+			called++
 			return fmt.Errorf("error")
 		}
-		called += 1
+		called++
 		return nil
 	}
 
 	cb := NewCircuitBreaker(1)
 	cb.BreakerOpen = func(cb *CircuitBreaker, err error) {
-		openCalled += 1
+		openCalled++
 	}
 
 	cb.Call(circuit) // Trip
@@ -173,7 +173,7 @@ func TestBreakerClosedCallsWhenBreakerClosed(t *testing.T) {
 	closedCalled := 0
 	circuit := func() error {
 		if called == 0 {
-			called += 1
+			called++
 			return fmt.Errorf("error")
 		}
 		return nil
@@ -181,7 +181,7 @@ func TestBreakerClosedCallsWhenBreakerClosed(t *testing.T) {
 
 	cb := NewCircuitBreaker(1)
 	cb.BreakerClosed = func(cb *CircuitBreaker) {
-		closedCalled += 1
+		closedCalled++
 	}
 
 	cb.Call(circuit)

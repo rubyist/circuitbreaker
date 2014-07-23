@@ -44,14 +44,15 @@ type circuit func() error
 type state int
 
 const (
-	open      state = iota
-	half_open state = iota
-	closed    state = iota
+	open     state = iota
+	halfopen state = iota
+	closed   state = iota
 )
 
+// Error codes returned by Call
 var (
-	BreakerOpen    = errors.New("breaker open")
-	BreakerTimeout = errors.New("breaker time out")
+	ErrBreakerOpen    = errors.New("breaker open")
+	ErrBreakerTimeout = errors.New("breaker time out")
 )
 
 // NewCircuitBreaker sets up a CircuitBreaker with a failure threshold and
@@ -78,7 +79,7 @@ func (cb *CircuitBreaker) Call(circuit circuit) error {
 	state := cb.state()
 
 	if state == open {
-		return BreakerOpen
+		return ErrBreakerOpen
 	}
 
 	var err error
@@ -89,7 +90,7 @@ func (cb *CircuitBreaker) Call(circuit circuit) error {
 	}
 
 	if err != nil {
-		if state == half_open {
+		if state == halfopen {
 			atomic.StoreInt64(&cb.halfOpens, 0)
 		}
 		atomic.AddInt64(&cb.failures, 1)
@@ -122,7 +123,7 @@ func (cb *CircuitBreaker) callWithTimeout(circuit circuit) error {
 	case <-c:
 		return err
 	case <-time.After(time.Second * time.Duration(cb.Timeout)):
-		return BreakerTimeout
+		return ErrBreakerTimeout
 	}
 }
 
@@ -132,10 +133,9 @@ func (cb *CircuitBreaker) state() state {
 		if since > cb.ResetTimeout {
 			if cb.halfOpens == 0 {
 				atomic.AddInt64(&cb.halfOpens, 1)
-				return half_open
-			} else {
-				return open
+				return halfopen
 			}
+			return open
 		}
 		return open
 	}
