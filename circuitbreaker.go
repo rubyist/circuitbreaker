@@ -143,5 +143,6 @@ func (cb *CircuitBreaker) state() state {
 }
 
 func (cb *CircuitBreaker) lastFailure() time.Time {
-	return *(*time.Time)(cb._lastFailure)
+	ptr := atomic.LoadPointer(&cb._lastFailure)
+	return *(*time.Time)(ptr)
 }
