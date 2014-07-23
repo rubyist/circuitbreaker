@@ -13,6 +13,9 @@ type HttpClient struct {
 	cb            *CircuitBreaker
 }
 
+// NewCircuitBreakerClient provides a circuit breaker wrapper around http.Client.
+// It wraps all of the regular http.Client functions. Specifying 0 for timeout will
+// give a breaker that does not check for time outs.
 func NewCircuitBreakerClient(timeout, threshold int, client *http.Client) *HttpClient {
 	if client == nil {
 		client = &http.Client{}

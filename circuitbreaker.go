@@ -1,3 +1,13 @@
+// Package circuitbreaker implements the Circuit Breaker pattern. It will wrap
+// a function call (typically one which uses remote services) and monitors for
+// failures and/or time outs. When a threshold of failures or time outs has been
+// reached, future calls to the function will not run. During this state, the
+// breaker will periodically allow the function to run and, if it is successful,
+// will start running the function again.
+//
+// The package also provides a wrapper around an http.Client that wraps all of
+// the http.Client functions with a CircuitBreaker.
+//
 package circuitbreaker
 
 import (
@@ -7,15 +17,27 @@ import (
 	"unsafe"
 )
 
+// CircuitBreaker is the circuit breaker interface. It provides two
+// fields for functions, BreakerOpen and BreakerClosed that will run
+// when the circuit breaker opens and closes, respectively.
 type CircuitBreaker struct {
-	Timeout       int
-	Threshold     int64
-	ResetTimeout  time.Duration
-	BreakerOpen   func(*CircuitBreaker, error)
+	// BreakerOpen, if set, will be called whenever the CircuitBreaker
+	// moves from the closed state to the open state. It is passed the
+	// CircuitBreaker object and last error that occured.
+	BreakerOpen func(*CircuitBreaker, error)
+
+	// BreakerClosed, if set, will be called whenever the CircuitBreaker
+	// moves from the closed state to the open state. It is passed the
+	// CircuitBreaker object.
 	BreakerClosed func(*CircuitBreaker)
-	failures      int64
-	_lastFailure  unsafe.Pointer
-	halfOpens     int64
+
+	Timeout      int
+	Threshold    int64
+	ResetTimeout time.Duration
+
+	failures     int64
+	_lastFailure unsafe.Pointer
+	halfOpens    int64
 }
 
 type circuit func() error
@@ -32,10 +54,16 @@ var (
 	BreakerTimeout = errors.New("breaker time out")
 )
 
+// NewCircuitBreaker sets up a CircuitBreaker with a failure threshold and
+// no time out. With this method, the call may block forever, though it can
+// handle time outs itself and return an error.
 func NewCircuitBreaker(threshold int) *CircuitBreaker {
 	return NewTimeoutCircuitBreaker(0, threshold)
 }
 
+// NewTimeoutCircuitBreaker sets up a CircuitBreaker with a failure threshold
+// and a time out. If the function takes longer than the time out, the failure
+// is recorded and can trip the circuit breaker of the threshold is passed.
 func NewTimeoutCircuitBreaker(timeout, threshold int) *CircuitBreaker {
 	return &CircuitBreaker{
 		Timeout:      timeout,
@@ -43,6 +71,9 @@ func NewTimeoutCircuitBreaker(timeout, threshold int) *CircuitBreaker {
 		ResetTimeout: time.Millisecond * 500}
 }
 
+// Call wraps the function the CircuitBreaker will protect. A failure is recorded
+// whenever the function returns an error. If the threshold is met, the CircuitBreaker
+// will trip.
 func (cb *CircuitBreaker) Call(circuit circuit) error {
 	state := cb.state()
 
