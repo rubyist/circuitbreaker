@@ -131,8 +131,7 @@ func (cb *CircuitBreaker) state() state {
 	if cb.failures >= cb.Threshold {
 		since := time.Since(cb.lastFailure())
 		if since > cb.ResetTimeout {
-			if cb.halfOpens == 0 {
-				atomic.AddInt64(&cb.halfOpens, 1)
+			if atomic.CompareAndSwapInt64(&cb.halfOpens, 0, 1) {
 				return halfopen
 			}
 			return open
