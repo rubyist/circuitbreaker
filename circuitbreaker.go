@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 type CircuitBreaker struct {
@@ -13,7 +14,7 @@ type CircuitBreaker struct {
 	BreakerOpen   func(*CircuitBreaker, error)
 	BreakerClosed func(*CircuitBreaker)
 	failures      int64
-	lastFailure   time.Time
+	_lastFailure  unsafe.Pointer
 	halfOpens     int64
 }
 
@@ -61,7 +62,8 @@ func (cb *CircuitBreaker) Call(circuit circuit) error {
 			atomic.StoreInt64(&cb.halfOpens, 0)
 		}
 		atomic.AddInt64(&cb.failures, 1)
-		cb.lastFailure = time.Now()
+		now := time.Now()
+		atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
 
 		if cb.BreakerOpen != nil && cb.failures == cb.Threshold {
 			cb.BreakerOpen(cb, err)
@@ -95,7 +97,7 @@ func (cb *CircuitBreaker) callWithTimeout(circuit circuit) error {
 
 func (cb *CircuitBreaker) state() state {
 	if cb.failures >= cb.Threshold {
-		since := time.Since(cb.lastFailure)
+		since := time.Since(cb.lastFailure())
 		if since > cb.ResetTimeout {
 			if cb.halfOpens == 0 {
 				atomic.AddInt64(&cb.halfOpens, 1)
@@ -107,4 +109,8 @@ func (cb *CircuitBreaker) state() state {
 		return open
 	}
 	return closed
+}
+
+func (cb *CircuitBreaker) lastFailure() time.Time {
+	return *(*time.Time)(cb._lastFailure)
 }
