@@ -93,22 +93,28 @@ func (cb *CircuitBreaker) Call(circuit circuit) error {
 		if state == halfopen {
 			atomic.StoreInt64(&cb.halfOpens, 0)
 		}
-		atomic.AddInt64(&cb.failures, 1)
+
+		// increment failure count, returning the new count
+		failures := atomic.AddInt64(&cb.failures, 1)
+
 		now := time.Now()
 		atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
 
-		if cb.BreakerOpen != nil && cb.failures == cb.Threshold {
+		// compare the local failure count against the threshold
+		if cb.BreakerOpen != nil && failures == cb.Threshold {
 			cb.BreakerOpen(cb, err)
 		}
 		return err
 	}
 
-	if cb.BreakerClosed != nil && cb.failures > 0 {
+	// zero the failure count, returning the old value
+	failures := atomic.SwapInt64(&cb.failures, 0)
+	atomic.StoreInt64(&cb.halfOpens, 0)
+
+	if cb.BreakerClosed != nil && failures > 0 {
 		cb.BreakerClosed(cb)
 	}
 
-	atomic.StoreInt64(&cb.failures, 0)
-	atomic.StoreInt64(&cb.halfOpens, 0)
 	return nil
 }
 
