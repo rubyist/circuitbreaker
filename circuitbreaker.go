@@ -31,7 +31,7 @@ type CircuitBreaker struct {
 	// CircuitBreaker object.
 	BreakerClosed func(*CircuitBreaker)
 
-	Timeout      int
+	Timeout      int64
 	Threshold    int64
 	ResetTimeout time.Duration
 
@@ -57,17 +57,17 @@ var (
 // NewCircuitBreaker sets up a CircuitBreaker with a failure threshold and
 // no time out. With this method, the call may block forever, though it can
 // handle time outs itself and return an error.
-func NewCircuitBreaker(threshold int) *CircuitBreaker {
+func NewCircuitBreaker(threshold int64) *CircuitBreaker {
 	return NewTimeoutCircuitBreaker(0, threshold)
 }
 
 // NewTimeoutCircuitBreaker sets up a CircuitBreaker with a failure threshold
 // and a time out. If the function takes longer than the time out, the failure
 // is recorded and can trip the circuit breaker of the threshold is passed.
-func NewTimeoutCircuitBreaker(timeout, threshold int) *CircuitBreaker {
+func NewTimeoutCircuitBreaker(timeout, threshold int64) *CircuitBreaker {
 	return &CircuitBreaker{
 		Timeout:      timeout,
-		Threshold:    int64(threshold),
+		Threshold:    threshold,
 		ResetTimeout: time.Millisecond * 500}
 }
 
