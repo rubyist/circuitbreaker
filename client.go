@@ -9,10 +9,10 @@ import (
 
 // HTTPClient is a wrapper around http.Client that provides circuit breaker capabilities.
 type HTTPClient struct {
-	Client        *http.Client
-	BreakerOpen   func(error)
-	BreakerClosed func()
-	cb            *CircuitBreaker
+	Client         *http.Client
+	BreakerTripped func()
+	BreakerReset   func()
+	cb             *TimeoutBreaker
 }
 
 // NewCircuitBreakerClient provides a circuit breaker wrapper around http.Client.
@@ -23,10 +23,10 @@ func NewCircuitBreakerClient(timeout time.Duration, threshold int64, client *htt
 		client = &http.Client{}
 	}
 
-	breaker := NewTimeoutCircuitBreaker(timeout, threshold)
+	breaker := NewTimeoutBreaker(timeout, threshold)
 	brclient := &HTTPClient{Client: client, cb: breaker}
-	breaker.BreakerOpen = brclient.runBreakerOpen
-	breaker.BreakerClosed = brclient.runBreakerClosed
+	breaker.BreakerTripped = brclient.runBreakerOpen
+	breaker.BreakerReset = brclient.runBreakerClosed
 	return brclient
 }
 
@@ -85,14 +85,14 @@ func (c *HTTPClient) PostForm(url string, data url.Values) (*http.Response, erro
 	return resp, err
 }
 
-func (c *HTTPClient) runBreakerOpen(cb *CircuitBreaker, err error) {
-	if c.BreakerOpen != nil {
-		c.BreakerOpen(err)
+func (c *HTTPClient) runBreakerOpen() {
+	if c.BreakerTripped != nil {
+		c.BreakerTripped()
 	}
 }
 
-func (c *HTTPClient) runBreakerClosed(cb *CircuitBreaker) {
-	if c.BreakerClosed != nil {
-		c.BreakerClosed()
+func (c *HTTPClient) runBreakerClosed() {
+	if c.BreakerReset != nil {
+		c.BreakerReset()
 	}
 }
