@@ -40,7 +40,6 @@ type CircuitBreaker struct {
 	halfOpens    int64
 }
 
-type circuit func() error
 type state int
 
 const (
@@ -75,7 +74,7 @@ func NewTimeoutCircuitBreaker(timeout, threshold int) *CircuitBreaker {
 // Call wraps the function the CircuitBreaker will protect. A failure is recorded
 // whenever the function returns an error. If the threshold is met, the CircuitBreaker
 // will trip.
-func (cb *CircuitBreaker) Call(circuit circuit) error {
+func (cb *CircuitBreaker) Call(circuit func() error) error {
 	state := cb.state()
 
 	if state == open {
@@ -118,7 +117,7 @@ func (cb *CircuitBreaker) Call(circuit circuit) error {
 	return nil
 }
 
-func (cb *CircuitBreaker) callWithTimeout(circuit circuit) error {
+func (cb *CircuitBreaker) callWithTimeout(circuit func() error) error {
 	c := make(chan int, 1)
 	var err error
 	go func() {
