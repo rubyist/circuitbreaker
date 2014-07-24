@@ -63,7 +63,7 @@ func TestTimingOutTripsBreaker(t *testing.T) {
 		return nil
 	}
 
-	cb := NewTimeoutCircuitBreaker(1, 1)
+	cb := NewTimeoutCircuitBreaker(time.Second, 1)
 	err := cb.Call(circuit)
 	if err == nil {
 		t.Fatal("Expected cb to return an error")

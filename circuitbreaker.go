@@ -31,8 +31,14 @@ type CircuitBreaker struct {
 	// CircuitBreaker object.
 	BreakerClosed func(*CircuitBreaker)
 
-	Timeout      int64
-	Threshold    int64
+	// Timeout is the length of time the CircuitBreaker will wait for Call() to finish
+	Timeout time.Duration
+
+	// Threshold is the number of failures CircuitBreaker will allow before tripping
+	Threshold int64
+
+	// ResetTimeout is the minimum amount of time the CircuitBreaker will wait
+	// before allowing the function to be called again
 	ResetTimeout time.Duration
 
 	failures     int64
@@ -64,7 +70,7 @@ func NewCircuitBreaker(threshold int64) *CircuitBreaker {
 // NewTimeoutCircuitBreaker sets up a CircuitBreaker with a failure threshold
 // and a time out. If the function takes longer than the time out, the failure
 // is recorded and can trip the circuit breaker of the threshold is passed.
-func NewTimeoutCircuitBreaker(timeout, threshold int64) *CircuitBreaker {
+func NewTimeoutCircuitBreaker(timeout time.Duration, threshold int64) *CircuitBreaker {
 	return &CircuitBreaker{
 		Timeout:      timeout,
 		Threshold:    threshold,
@@ -127,7 +133,7 @@ func (cb *CircuitBreaker) callWithTimeout(circuit func() error) error {
 	select {
 	case <-c:
 		return err
-	case <-time.After(time.Second * time.Duration(cb.Timeout)):
+	case <-time.After(cb.Timeout):
 		return ErrBreakerTimeout
 	}
 }
