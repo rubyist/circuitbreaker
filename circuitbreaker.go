@@ -211,6 +211,8 @@ type TimeoutBreaker struct {
 }
 
 // NewTimeoutBreaker returns a new TimeoutBreaker with the given call timeout and failure threshold.
+// If timeout is specified as 0 then no timeout will be used and the behavior will be the
+// same as a ThresholdBreaker
 func NewTimeoutBreaker(timeout time.Duration, threshold int64) *TimeoutBreaker {
 	return &TimeoutBreaker{timeout, NewThresholdBreaker(threshold)}
 }
@@ -225,6 +227,11 @@ func (cb *TimeoutBreaker) Fail() {
 func (cb *TimeoutBreaker) Call(circuit func() error) error {
 	c := make(chan int, 1)
 	var err error
+
+	if cb.Timeout == 0 {
+		return cb.ThresholdBreaker.Call(circuit)
+	}
+
 	go func() {
 		err = cb.ThresholdBreaker.Call(circuit)
 		close(c)
