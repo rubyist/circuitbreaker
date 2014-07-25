@@ -100,11 +100,19 @@ func (cb *ResettingBreaker) Fail() {
 	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
 }
 
+// Ready will return true if the circuit breaker is ready to call the function.
+// It will be ready if the breaker is in a reset state, or if it is time to retry
+// the call for auto resetting.
+func (cb *ResettingBreaker) Ready() bool {
+	state := cb.state()
+	return state == closed || state == halfopen
+}
+
 // State returns the state of the ResettingBreaker. The states available are:
 // closed - the circuit is in a reset state and is operational
 // open - the circuit is in a tripped state
 // halfopen - the circuit is in a tripped state but the reset timeout has passed
-func (cb *ResettingBreaker) State() state {
+func (cb *ResettingBreaker) state() state {
 	tripped := cb.Tripped()
 	if tripped {
 		since := time.Since(cb.lastFailure())
@@ -170,7 +178,7 @@ func (cb *ThresholdBreaker) Reset() int64 {
 // whenever the function returns an error. If the threshold is met, the ThresholdBreaker
 // will trip.
 func (cb *ThresholdBreaker) Call(circuit func() error) error {
-	state := cb.State()
+	state := cb.state()
 
 	if state == open {
 		return ErrBreakerOpen

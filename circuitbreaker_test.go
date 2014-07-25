@@ -59,18 +59,18 @@ func TestCircuitBreakerCallbacks(t *testing.T) {
 func TestResettingBreakerState(t *testing.T) {
 	cb := NewResettingBreaker(time.Millisecond * 100)
 
-	if cb.State() != closed {
+	if cb.state() != closed {
 		t.Fatal("expected resetting breaker to start closed")
 	}
 
 	cb.Fail()
 	cb.Trip()
-	if cb.State() != open {
+	if cb.state() != open {
 		t.Fatal("expected resetting breaker to be open")
 	}
 
 	time.Sleep(cb.ResetTimeout)
-	if cb.State() != halfopen {
+	if cb.state() != halfopen {
 		t.Fatal("expected resetting breaker to indicate a reattempt")
 	}
 }

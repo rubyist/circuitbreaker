@@ -23,7 +23,7 @@ func ExampleThresholdBreaker_manual() {
 	// This example demonstrates the manual use of a ThresholdBreaker. The breaker
 	// will trip when Fail is called 10 times in a row.
 	breaker := NewThresholdBreaker(10)
-	if !breaker.Tripped() || (breaker.State() == halfopen) {
+	if breaker.Ready() {
 		err := remoteCall
 		if err != nil {
 			breaker.Fail()
