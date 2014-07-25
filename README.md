@@ -32,17 +32,16 @@ Here is a quick example of what circuitbreaker provides
 
 ```go
 // Creates a circuit breaker that will trip if the function fails 10 times
-cb := NewCircuitBreaker(10)
+cb := NewThresholdBreaker(10)
 
-cb.BreakerOpen = func(c *CircuitBreaker, err error) {
+cb.BreakerTripped = func() {
 	// This function will be called every time the circuit breaker moves
-	// from closed to open, passing in the circuit breaker object and
-	// the error returned by the failing function
+	// from reset to tripped.
 }
 
-cb.BreakerClosed = func(c *CircuitBreaker) {
+cb.BreakerReset = func() {
 	// This function will be called every time the circuit breaker moves
-	// from open to closed, passing in the circuit breaker object
+	// from tripped to reset.
 }
 
 cb.Call(func() error {
@@ -56,7 +55,7 @@ Circuitbreaker can also wrap a time out around the remote call.
 ```go
 // Creates a circuit breaker that will trip after 10 failures or time outs
 // using a time out of 5 seconds
-cb := NewtimeoutCircuitBreaker(5, 10)
+cb := NewTimeoutBreaker(Time.Second * 5, 10)
 
 // Proceed as above
 
@@ -68,16 +67,18 @@ time out around any request.
 ```go
 // Passing in nil will create a regular http.Client.
 // You can also build your own http.Client and pass it in
-client := circuitbreaker.NewCircuitBreakerClient(time.Second * 5, 10, nil)
-client.BreakerOpen = func(err error) {
+client := NewHTTPClient(time.Second * 5, 10, nil)
+client.BreakerTripped = func() {
 	// Perhaps notify your monitoring system
 }
-client.BreakerClosed = func() {
+client.BreakerReset = func() {
 	// Perhaps notify your monitoring system
 }
 
 resp, err := client.Get("http://example.com/resource.json")
 ```
+
+See the godoc for more examples.
 
 ## Bugs, Issues, Feedback
 
