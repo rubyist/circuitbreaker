@@ -8,7 +8,7 @@ import (
 )
 
 func TestCircuitBreakerTripping(t *testing.T) {
-	cb := &CircuitBreaker{}
+	cb := &TrippableCircuitBreaker{}
 
 	if cb.Tripped() {
 		t.Fatal("expected breaker to not be tripped")
@@ -32,7 +32,7 @@ func TestCircuitBreakerCallbacks(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	cb := &CircuitBreaker{}
+	cb := &TrippableCircuitBreaker{}
 	cb.BreakerTripped = func() {
 		trippedCalled = true
 		wg.Done()

@@ -31,10 +31,11 @@ var (
 	ErrBreakerTimeout = errors.New("breaker time out")
 )
 
-// CircuitBreaker is a base for building trippable circuit breakers. It provides
-// two fields for functions, BreakerTripped and BreakerReset that will run
-// when the circuit breaker is tripped and reset, respectively.
-type CircuitBreaker struct {
+
+// TrippableCircuitBreaker is a base for building trippable circuit breakers. It
+// provides two fields for functions, BreakerTripped and BreakerReset that will
+// run when the circuit breaker is tripped and reset, respectively.
+type TrippableCircuitBreaker struct {
 	// BreakerTripped, if set, will be called whenever the CircuitBreaker
 	// moves from the reset state to the tripped state.
 	BreakerTripped func()
@@ -48,7 +49,7 @@ type CircuitBreaker struct {
 
 // Trip will trip the circuit breaker. After Trip() is called, Tripped() will
 // return true. If a BreakerTripped callback is available it will be run.
-func (cb *CircuitBreaker) Trip() {
+func (cb *TrippableCircuitBreaker) Trip() {
 	atomic.StoreInt32(&cb.tripped, 1)
 	if cb.BreakerTripped != nil {
 		go cb.BreakerTripped()
@@ -57,7 +58,7 @@ func (cb *CircuitBreaker) Trip() {
 
 // Reset will reset the circuit breaker. After Reset() is called, Tripped() will
 // return false. If a BreakerReset callback is available it will be run.
-func (cb *CircuitBreaker) Reset() {
+func (cb *TrippableCircuitBreaker) Reset() {
 	atomic.StoreInt32(&cb.tripped, 0)
 	if cb.BreakerReset != nil {
 		go cb.BreakerReset()
@@ -65,7 +66,7 @@ func (cb *CircuitBreaker) Reset() {
 }
 
 // Tripped returns true if the circuit breaker is tripped, false if it is reset.
-func (cb *CircuitBreaker) Tripped() bool {
+func (cb *TrippableCircuitBreaker) Tripped() bool {
 	return cb.tripped == 1
 }
 
@@ -79,19 +80,19 @@ type ResettingBreaker struct {
 
 	_lastFailure unsafe.Pointer
 	halfOpens    int64
-	*CircuitBreaker
+	*TrippableCircuitBreaker
 }
 
 // NewResettingBreaker returns a new ResettingBreaker with the given reset timeout
 func NewResettingBreaker(resetTimeout time.Duration) *ResettingBreaker {
-	return &ResettingBreaker{resetTimeout, nil, 0, &CircuitBreaker{}}
+	return &ResettingBreaker{resetTimeout, nil, 0, &TrippableCircuitBreaker{}}
 }
 
 // Trip will trip the circuit breaker. After Trip() is called, Tripped() will
 // return true. If a BreakerTripped callback is available it will be run.
 func (cb *ResettingBreaker) Trip() {
 	cb.Fail()
-	cb.CircuitBreaker.Trip()
+	cb.TrippableCircuitBreaker.Trip()
 }
 
 // Fail records the time of a failure
