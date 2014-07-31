@@ -29,8 +29,8 @@ const (
 var (
 	ErrBreakerOpen    = errors.New("breaker open")
 	ErrBreakerTimeout = errors.New("breaker time out")
+	noop = &noOpCircuitBreaker{}
 )
-
 
 type CircuitBreaker interface {
 	Call(func() error) error
@@ -281,3 +281,31 @@ func (cb *TimeoutBreaker) Call(circuit func() error) error {
 		return ErrBreakerTimeout
 	}
 }
+
+// Get ensures a CircuitBreaker is not nil by using the no-op as a fallback.
+func Get(cb CircuitBreaker) CircuitBreaker {
+	if cb == nil {
+		return NoOp()
+	}
+	return cb
+}
+
+// NoOp returns a CircuitBreaker null object.  It implements the interface with
+// no-ops for every function.
+func NoOp() CircuitBreaker {
+	return noop
+}
+
+type noOpCircuitBreaker struct{}
+
+func (c *noOpCircuitBreaker) Call(f func() error) error {
+	return f()
+}
+
+func (c *noOpCircuitBreaker) Fail()           {}
+func (c *noOpCircuitBreaker) Trip()           {}
+func (c *noOpCircuitBreaker) Reset()          {}
+func (c *noOpCircuitBreaker) ResetFailures()  {}
+func (c *noOpCircuitBreaker) Failures() int64 { return 0 }
+func (c *noOpCircuitBreaker) Ready() bool     { return true }
+func (c *noOpCircuitBreaker) Tripped() bool   { return false }

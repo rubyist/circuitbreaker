@@ -191,4 +191,9 @@ func TestCircuitBreakerInterface(t *testing.T) {
 	if _, ok := cb.(*TimeoutBreaker); !ok {
 		t.Errorf("%v is not a TimeoutBreaker", cb)
 	}
+
+	cb = NoOp()
+	if _, ok := cb.(*noOpCircuitBreaker); !ok {
+		t.Errorf("%v is not a no-op breaker", cb)
+	}
 }
