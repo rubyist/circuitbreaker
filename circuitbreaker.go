@@ -32,6 +32,17 @@ var (
 )
 
 
+type CircuitBreaker interface {
+	Call(func() error) error
+	Fail()
+	Failures() int64
+	Trip()
+	Reset()
+	ResetFailures()
+	Ready() bool
+	Tripped() bool
+}
+
 // TrippableCircuitBreaker is a base for building trippable circuit breakers. It
 // provides two fields for functions, BreakerTripped and BreakerReset that will
 // run when the circuit breaker is tripped and reset, respectively.
@@ -69,6 +80,17 @@ func (cb *TrippableCircuitBreaker) Reset() {
 func (cb *TrippableCircuitBreaker) Tripped() bool {
 	return cb.tripped == 1
 }
+
+// Call runs the given function.  No wrapping is performed.
+func (cb *TrippableCircuitBreaker) Call(f func() error) error {
+	return f()
+}
+
+func (cb *TrippableCircuitBreaker) Failures() int64 {
+	return 0
+}
+
+func (cb *TrippableCircuitBreaker) ResetFailures() {}
 
 // ResettingBreaker is used to build circuit breakers that will attempt to
 // automatically reset themselves after a certain period of time since the

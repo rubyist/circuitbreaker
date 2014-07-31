@@ -174,3 +174,21 @@ func TestTimeoutBreaker(t *testing.T) {
 		t.Fatal("expected timeout breaker to be open")
 	}
 }
+
+func TestCircuitBreakerInterface(t *testing.T) {
+	var cb CircuitBreaker
+	cb = NewResettingBreaker(0)
+	if _, ok := cb.(*ResettingBreaker); !ok {
+		t.Errorf("%v is not a ResettingBreaker", cb)
+	}
+
+	cb = NewThresholdBreaker(0)
+	if _, ok := cb.(*ThresholdBreaker); !ok {
+		t.Errorf("%v is not a ThresholdBreaker", cb)
+	}
+
+	cb = NewTimeoutBreaker(0, 0)
+	if _, ok := cb.(*TimeoutBreaker); !ok {
+		t.Errorf("%v is not a TimeoutBreaker", cb)
+	}
+}
