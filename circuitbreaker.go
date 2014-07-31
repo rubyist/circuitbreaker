@@ -41,6 +41,8 @@ type CircuitBreaker interface {
 	ResetFailures()
 	Ready() bool
 	Tripped() bool
+	OnTrip(func())
+	OnReset(func())
 }
 
 // TrippableCircuitBreaker is a base for building trippable circuit breakers. It
@@ -74,6 +76,14 @@ func (cb *TrippableCircuitBreaker) Reset() {
 	if cb.BreakerReset != nil {
 		go cb.BreakerReset()
 	}
+}
+
+func (cb *TrippableCircuitBreaker) OnTrip(f func()) {
+	cb.BreakerTripped = f
+}
+
+func (cb *TrippableCircuitBreaker) OnReset(f func()) {
+	cb.BreakerReset = f
 }
 
 // Tripped returns true if the circuit breaker is tripped, false if it is reset.
@@ -309,3 +319,5 @@ func (c *noOpCircuitBreaker) ResetFailures()  {}
 func (c *noOpCircuitBreaker) Failures() int64 { return 0 }
 func (c *noOpCircuitBreaker) Ready() bool     { return true }
 func (c *noOpCircuitBreaker) Tripped() bool   { return false }
+func (c *noOpCircuitBreaker) OnTrip(f func()) {}
+func (c *noOpCircuitBreaker) OnReset(f func()) {}
