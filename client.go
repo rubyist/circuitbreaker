@@ -34,8 +34,8 @@ func NewHTTPClient(timeout time.Duration, threshold int64, client *http.Client) 
 	breaker := NewTimeoutBreaker(timeout, threshold)
 	breakers := make(map[interface{}]*TimeoutBreaker, 0)
 	brclient := &HTTPClient{Client: client, defaultBreaker: breaker, breakers: breakers}
-	breaker.BreakerTripped = brclient.runBreakerTripped
-	breaker.BreakerReset = brclient.runBreakerReset
+	breaker.OnTrip(brclient.runBreakerTripped)
+	breaker.OnReset(brclient.runBreakerReset)
 	return brclient
 }
 
@@ -59,8 +59,8 @@ func NewHostBasedHTTPClient(timeout time.Duration, threshold int64, client *http
 		cb, ok := c.breakers[host]
 		if !ok {
 			cb = NewTimeoutBreaker(timeout, threshold)
-			cb.BreakerTripped = brclient.runBreakerTripped
-			cb.BreakerReset = brclient.runBreakerReset
+			cb.OnTrip(brclient.runBreakerTripped)
+			cb.OnReset(brclient.runBreakerReset)
 			c.breakers[host] = cb
 		}
 		return cb

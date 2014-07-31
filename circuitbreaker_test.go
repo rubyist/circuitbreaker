@@ -8,7 +8,7 @@ import (
 )
 
 func TestCircuitBreakerTripping(t *testing.T) {
-	cb := &CircuitBreaker{}
+	cb := &TrippableBreaker{}
 
 	if cb.Tripped() {
 		t.Fatal("expected breaker to not be tripped")
@@ -32,15 +32,15 @@ func TestCircuitBreakerCallbacks(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	cb := &CircuitBreaker{}
-	cb.BreakerTripped = func() {
+	cb := &TrippableBreaker{}
+	cb.OnTrip(func() {
 		trippedCalled = true
 		wg.Done()
-	}
-	cb.BreakerReset = func() {
+	})
+	cb.OnReset(func() {
 		resetCalled = true
 		wg.Done()
-	}
+	})
 
 	cb.Trip()
 	cb.Reset()
@@ -172,5 +172,28 @@ func TestTimeoutBreaker(t *testing.T) {
 
 	if !cb.Tripped() {
 		t.Fatal("expected timeout breaker to be open")
+	}
+}
+
+func TestCircuitBreakerInterface(t *testing.T) {
+	var cb CircuitBreaker
+	cb = NewResettingBreaker(0)
+	if _, ok := cb.(*ResettingBreaker); !ok {
+		t.Errorf("%v is not a ResettingBreaker", cb)
+	}
+
+	cb = NewThresholdBreaker(0)
+	if _, ok := cb.(*ThresholdBreaker); !ok {
+		t.Errorf("%v is not a ThresholdBreaker", cb)
+	}
+
+	cb = NewTimeoutBreaker(0, 0)
+	if _, ok := cb.(*TimeoutBreaker); !ok {
+		t.Errorf("%v is not a TimeoutBreaker", cb)
+	}
+
+	cb = NoOp()
+	if _, ok := cb.(*noOpCircuitBreaker); !ok {
+		t.Errorf("%v is not a no-op breaker", cb)
 	}
 }

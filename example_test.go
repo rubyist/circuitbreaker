@@ -68,12 +68,12 @@ func ExampleCircuitBreaker_callbacks() {
 	// This example demonstrates the BreakerTripped and BreakerReset callbacks. These are
 	// available on all breaker types.
 	breaker := NewThresholdBreaker(1)
-	breaker.BreakerTripped = func() {
+	breaker.OnTrip(func() {
 		log.Println("breaker tripped")
-	}
-	breaker.BreakerReset = func() {
+	})
+	breaker.OnReset(func() {
 		log.Println("breaker reset")
-	}
+	})
 
 	breaker.Fail()
 	breaker.Reset()
