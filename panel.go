@@ -13,3 +13,13 @@ func (p Panel) Get(name string) CircuitBreaker {
 
   return NoOp()
 }
+
+// GetAll creates a new panel from the given names in this panel.
+func (p Panel) GetAll(names ...string) Panel {
+  newPanel := Panel{}
+  for _, name := range names {
+    newPanel[name] = p.Get(name)
+  }
+
+  return newPanel
+}
