@@ -171,6 +171,17 @@ func (cb *ThresholdBreaker) Fail() {
 // return false. If a BreakerReset callback is available it will be run.
 func (cb *ThresholdBreaker) Reset() {
 	cb.ResettingBreaker.Reset()
+	cb.ResetFailures()
+}
+
+// Failures returns the number of failures for this circuit breaker.
+func (cb *ThresholdBreaker) Failures() int64 {
+	return atomic.LoadInt64(&cb.failures, 0)
+}
+
+// ResetFailures resets the failure count for this circuit breaker.  The state
+// will not change, and no callback is run.
+func (cb *ThresholdBreaker) ResetFailures() {
 	atomic.SwapInt64(&cb.failures, 0)
 }
 
