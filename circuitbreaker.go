@@ -176,7 +176,7 @@ func (cb *ThresholdBreaker) Reset() {
 
 // Failures returns the number of failures for this circuit breaker.
 func (cb *ThresholdBreaker) Failures() int64 {
-	return atomic.LoadInt64(&cb.failures, 0)
+	return atomic.LoadInt64(&cb.failures)
 }
 
 // ResetFailures resets the failure count for this circuit breaker.  The state
