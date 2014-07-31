@@ -169,9 +169,9 @@ func (cb *ThresholdBreaker) Fail() {
 
 // Reset will reset the circuit breaker. After Reset() is called, Tripped() will
 // return false. If a BreakerReset callback is available it will be run.
-func (cb *ThresholdBreaker) Reset() int64 {
+func (cb *ThresholdBreaker) Reset() {
 	cb.ResettingBreaker.Reset()
-	return atomic.SwapInt64(&cb.failures, 0)
+	atomic.SwapInt64(&cb.failures, 0)
 }
 
 // Call wraps the function the ThresholdBreaker will protect. A failure is recorded
