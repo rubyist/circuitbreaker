@@ -287,6 +287,78 @@ func (cb *TimeoutBreaker) Call(circuit func() error) error {
 	}
 }
 
+// FrequencyBreaker is a ThresholdBreaker that will only trip if the threshold is met
+// within a certain amount of time.
+type FrequencyBreaker struct {
+	// Duration is the amount of time in which the failure theshold must be met.
+	Duration     time.Duration
+	_failureTick unsafe.Pointer
+	*ThresholdBreaker
+}
+
+// NewFrequencyBreaker returns a new FrequencyBreaker with the given duration
+// and failure threshold. If a duration is specified as 0 then no duration will be used and
+// the behavior will be the same as a ThresholdBreaker
+func NewFrequencyBreaker(duration time.Duration, threshold int64) *FrequencyBreaker {
+	return &FrequencyBreaker{duration, nil, NewThresholdBreaker(threshold)}
+}
+
+// Fail records a failure. If the failure count meets the threshold within the duration,
+// the circuit breaker will trip. If a BreakerTripped callback is available it will be run.
+func (cb *FrequencyBreaker) Fail() {
+	if cb._failureTick == nil {
+		now := time.Now()
+		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
+		cb.ThresholdBreaker.Fail()
+		return
+	}
+
+	lastTick := cb.failureTick()
+	since := time.Since(lastTick)
+	if since > cb.Duration {
+		now := time.Now()
+		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
+		atomic.SwapInt64(&cb.failures, 0)
+	}
+	cb.ThresholdBreaker.Fail()
+}
+
+// Call wraps the function the FrequencyBreaker will protect. A failure is recorded
+// whenever the function returns an error. If the threshold is met within the duration,
+// the FrequencyBreaker will trip.
+func (cb *FrequencyBreaker) Call(circuit func() error) error {
+	if cb.Duration == 0 {
+		return cb.ThresholdBreaker.Call(circuit)
+	}
+
+	state := cb.state()
+
+	if state == open {
+		return ErrBreakerOpen
+	}
+
+	err := circuit()
+
+	if err != nil {
+		if state == halfopen {
+			atomic.StoreInt64(&cb.halfOpens, 0)
+		}
+
+		cb.Fail()
+
+		return err
+	}
+
+	cb.Reset()
+
+	return nil
+}
+
+func (cb *FrequencyBreaker) failureTick() time.Time {
+	ptr := atomic.LoadPointer(&cb._failureTick)
+	return *(*time.Time)(ptr)
+}
+
 // NoOp returns a CircuitBreaker null object.  It implements the interface with
 // no-ops for every function.
 func NoOp() CircuitBreaker {

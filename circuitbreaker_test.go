@@ -175,6 +175,35 @@ func TestTimeoutBreaker(t *testing.T) {
 	}
 }
 
+func TestFrequencyBreakerTripping(t *testing.T) {
+	cb := NewFrequencyBreaker(time.Second*2, 2)
+	circuit := func() error {
+		return fmt.Errorf("error")
+	}
+
+	cb.Call(circuit)
+	cb.Call(circuit)
+
+	if !cb.Tripped() {
+		t.Fatal("expected frequency breaker to be tripped")
+	}
+}
+
+func TestFrequencyBreakerNotTripping(t *testing.T) {
+	cb := NewFrequencyBreaker(time.Millisecond*200, 2)
+	circuit := func() error {
+		return fmt.Errorf("error")
+	}
+
+	cb.Call(circuit)
+	time.Sleep(time.Millisecond * 210)
+	cb.Call(circuit)
+
+	if cb.Tripped() {
+		t.Fatal("expected frequency breaker to not be tripped")
+	}
+}
+
 func TestCircuitBreakerInterface(t *testing.T) {
 	var cb CircuitBreaker
 	cb = NewResettingBreaker(0)
