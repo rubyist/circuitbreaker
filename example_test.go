@@ -47,6 +47,16 @@ func ExampleTimeoutBreaker() {
 	}
 }
 
+func ExampleFrequencyBreaker() {
+	// This example sets up a FrequencyBreaker that will trip if remoteCall returns
+	// an error 10 times in a row within a period of 2 minutes.
+	breaker := NewFrequencyBreaker(time.Minute*2, 10)
+	err := breaker.Call(remoteCall)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func ExampleHTTPClient() {
 	// This example sets up an HTTP client wrapped in a TimeoutBreaker. The breaker
 	// will trip with the same behavior as TimeoutBreaker.

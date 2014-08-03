@@ -8,7 +8,7 @@ import (
 
 func TestPanelGet(t *testing.T) {
 	noop := NoOp()
-	rb := NewResettingBreaker(0)
+	rb := NewTrippableBreaker(0)
 	p := NewPanel()
 	p.Add("a", rb)
 
@@ -29,7 +29,7 @@ func TestPanelGet(t *testing.T) {
 
 func TestPanelGetAll(t *testing.T) {
 	noop := NoOp()
-	rb := NewResettingBreaker(0)
+	rb := NewTrippableBreaker(0)
 	p := NewPanel()
 	p.Add("a", rb)
 
@@ -51,7 +51,7 @@ func TestPanelGetAll(t *testing.T) {
 
 func TestPanelAdd(t *testing.T) {
 	p := NewPanel()
-	rb := NewResettingBreaker(0)
+	rb := NewTrippableBreaker(0)
 
 	if l := len(p.Circuits); l != 0 {
 		t.Errorf("Expected 0 item, got %d", l)

@@ -34,15 +34,15 @@ Here is a quick example of what circuitbreaker provides
 // Creates a circuit breaker that will trip if the function fails 10 times
 cb := NewThresholdBreaker(10)
 
-cb.BreakerTripped = func() {
+cb.OnTrip(func() {
 	// This function will be called every time the circuit breaker moves
 	// from reset to tripped.
-}
+})
 
-cb.BreakerReset = func() {
+cb.OnReset(func() {
 	// This function will be called every time the circuit breaker moves
 	// from tripped to reset.
-}
+})
 
 cb.Call(func() error {
 	// This is where you'll do some remote call
@@ -59,6 +59,15 @@ cb := NewTimeoutBreaker(Time.Second * 5, 10)
 
 // Proceed as above
 
+```
+
+Circuitbreaker can also trip based on the number of failures in a given time period.
+
+```go
+// Creates a circuit breaker that will trip if 10 failures occur in 1 minute
+cb := NewFrequencyBreaker(time.Minute, 10)
+
+// Proceed as above
 ```
 
 Circuitbreaker also provides a wrapper around `http.Client` that will wrap a
