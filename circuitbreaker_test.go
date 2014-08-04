@@ -56,8 +56,8 @@ func TestCircuitBreakerCallbacks(t *testing.T) {
 	}
 }
 
-func TestResettingBreakerState(t *testing.T) {
-	cb := NewResettingBreaker(time.Millisecond * 100)
+func TestTrippableBreakerState(t *testing.T) {
+	cb := NewTrippableBreaker(time.Millisecond * 100)
 
 	if cb.state() != closed {
 		t.Fatal("expected resetting breaker to start closed")
@@ -206,8 +206,8 @@ func TestFrequencyBreakerNotTripping(t *testing.T) {
 
 func TestCircuitBreakerInterface(t *testing.T) {
 	var cb CircuitBreaker
-	cb = NewResettingBreaker(0)
-	if _, ok := cb.(*ResettingBreaker); !ok {
+	cb = NewTrippableBreaker(0)
+	if _, ok := cb.(*TrippableBreaker); !ok {
 		t.Errorf("%v is not a ResettingBreaker", cb)
 	}
 

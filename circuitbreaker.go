@@ -48,6 +48,12 @@ type CircuitBreaker interface {
 // TrippableBreaker is a base for building trippable circuit breakers. It keeps
 // track of the tripped state and runs the OnTrip and OnReset callbacks.
 type TrippableBreaker struct {
+	// ResetTimeout is the minimum amount of time the CircuitBreaker will wait
+	// before allowing the function to be called again
+	ResetTimeout time.Duration
+
+	_lastFailure   unsafe.Pointer
+	halfOpens      int64
 	breakerTripped []func()
 	breakerReset   []func()
 	tripped        int32
@@ -56,10 +62,16 @@ type TrippableBreaker struct {
 // Trip will trip the circuit breaker. After Trip() is called, Tripped() will
 // return true. If an OnTrip callback is available it will be run.
 func (cb *TrippableBreaker) Trip() {
+	cb.Fail()
 	atomic.StoreInt32(&cb.tripped, 1)
 	for _, f := range cb.breakerTripped {
 		go f()
 	}
+}
+
+// NewResettingBreaker returns a new ResettingBreaker with the given reset timeout
+func NewTrippableBreaker(resetTimeout time.Duration) *TrippableBreaker {
+	return &TrippableBreaker{ResetTimeout: resetTimeout}
 }
 
 // Reset will reset the circuit breaker. After Reset() is called, Tripped() will
@@ -103,33 +115,8 @@ func (cb *TrippableBreaker) Failures() int64 {
 	return 0
 }
 
-// ResettingBreaker is used to build circuit breakers that will attempt to
-// automatically reset themselves after a certain period of time since the
-// last failure.
-type ResettingBreaker struct {
-	// ResetTimeout is the minimum amount of time the CircuitBreaker will wait
-	// before allowing the function to be called again
-	ResetTimeout time.Duration
-
-	_lastFailure unsafe.Pointer
-	halfOpens    int64
-	*TrippableBreaker
-}
-
-// NewResettingBreaker returns a new ResettingBreaker with the given reset timeout
-func NewResettingBreaker(resetTimeout time.Duration) *ResettingBreaker {
-	return &ResettingBreaker{resetTimeout, nil, 0, &TrippableBreaker{}}
-}
-
-// Trip will trip the circuit breaker. After Trip() is called, Tripped() will
-// return true. If an OnTrip callback is available it will be run.
-func (cb *ResettingBreaker) Trip() {
-	cb.Fail()
-	cb.TrippableBreaker.Trip()
-}
-
 // Fail records the time of a failure
-func (cb *ResettingBreaker) Fail() {
+func (cb *TrippableBreaker) Fail() {
 	now := time.Now()
 	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
 }
@@ -137,16 +124,16 @@ func (cb *ResettingBreaker) Fail() {
 // Ready will return true if the circuit breaker is ready to call the function.
 // It will be ready if the breaker is in a reset state, or if it is time to retry
 // the call for auto resetting.
-func (cb *ResettingBreaker) Ready() bool {
+func (cb *TrippableBreaker) Ready() bool {
 	state := cb.state()
 	return state == closed || state == halfopen
 }
 
-// state returns the state of the ResettingBreaker. The states available are:
+// state returns the state of the TrippableBreaker. The states available are:
 // closed - the circuit is in a reset state and is operational
 // open - the circuit is in a tripped state
 // halfopen - the circuit is in a tripped state but the reset timeout has passed
-func (cb *ResettingBreaker) state() state {
+func (cb *TrippableBreaker) state() state {
 	tripped := cb.Tripped()
 	if tripped {
 		since := time.Since(cb.lastFailure())
@@ -161,7 +148,7 @@ func (cb *ResettingBreaker) state() state {
 	return closed
 }
 
-func (cb *ResettingBreaker) lastFailure() time.Time {
+func (cb *TrippableBreaker) lastFailure() time.Time {
 	ptr := atomic.LoadPointer(&cb._lastFailure)
 	return *(*time.Time)(ptr)
 }
@@ -176,12 +163,12 @@ type ThresholdBreaker struct {
 
 	failures int64
 
-	*ResettingBreaker
+	*TrippableBreaker
 }
 
 // NewThresholdBreaker creates a new ThresholdBreaker with the given failure threshold.
 func NewThresholdBreaker(threshold int64) *ThresholdBreaker {
-	return &ThresholdBreaker{threshold, 0, NewResettingBreaker(time.Millisecond * 500)}
+	return &ThresholdBreaker{threshold, 0, NewTrippableBreaker(time.Millisecond * 500)}
 }
 
 // Fail records a failure. If the failure count meets the threshold, the circuit breaker
@@ -191,7 +178,7 @@ func (cb *ThresholdBreaker) Fail() {
 		return
 	}
 
-	cb.ResettingBreaker.Fail()
+	cb.TrippableBreaker.Fail()
 	failures := atomic.AddInt64(&cb.failures, 1)
 	if failures == cb.Threshold {
 		cb.Trip()
@@ -204,7 +191,7 @@ func (cb *ThresholdBreaker) Fail() {
 // Reset will reset the circuit breaker. After Reset() is called, Tripped() will
 // return false. If a BreakerReset callback is available it will be run.
 func (cb *ThresholdBreaker) Reset() {
-	cb.ResettingBreaker.Reset()
+	cb.TrippableBreaker.Reset()
 	atomic.SwapInt64(&cb.failures, 0)
 }
 
