@@ -57,6 +57,12 @@ type TrippableBreaker struct {
 	breakerTripped []func()
 	breakerReset   []func()
 	tripped        int32
+	failures       int64
+}
+
+// NewResettingBreaker returns a new ResettingBreaker with the given reset timeout
+func NewTrippableBreaker(resetTimeout time.Duration) *TrippableBreaker {
+	return &TrippableBreaker{ResetTimeout: resetTimeout}
 }
 
 // Trip will trip the circuit breaker. After Trip() is called, Tripped() will
@@ -69,15 +75,11 @@ func (cb *TrippableBreaker) Trip() {
 	}
 }
 
-// NewResettingBreaker returns a new ResettingBreaker with the given reset timeout
-func NewTrippableBreaker(resetTimeout time.Duration) *TrippableBreaker {
-	return &TrippableBreaker{ResetTimeout: resetTimeout}
-}
-
 // Reset will reset the circuit breaker. After Reset() is called, Tripped() will
 // return false. If an OnReset callback is available it will be run.
 func (cb *TrippableBreaker) Reset() {
 	atomic.StoreInt32(&cb.tripped, 0)
+	atomic.SwapInt64(&cb.failures, 0)
 	for _, f := range cb.breakerReset {
 		go f()
 	}
@@ -109,10 +111,9 @@ func (cb *TrippableBreaker) Call(f func() error) error {
 	return f()
 }
 
-// Failures will always return 0 for a TrippableBreaker. This kind of breaker
-// does not know about or track failures.
+// Failures returns the number of failures for this circuit breaker.
 func (cb *TrippableBreaker) Failures() int64 {
-	return 0
+	return atomic.LoadInt64(&cb.failures)
 }
 
 // Fail records the time of a failure
@@ -153,57 +154,60 @@ func (cb *TrippableBreaker) lastFailure() time.Time {
 	return *(*time.Time)(ptr)
 }
 
-// ThresholdBreaker is a ResettingCircuitBreaker that will trip when its failure count
-// passes a given threshold. Clients of ThresholdBreaker can either manually call the
-// Fail function to record a failure, checking the tripped state themselves, or they
-// can use the Call function to wrap the ThresholdBreaker around a function call.
-type ThresholdBreaker struct {
+// FrequencyBreaker is a circuit breaker that will only trip if the threshold is met
+// within a certain amount of time.
+type FrequencyBreaker struct {
+	// Duration is the amount of time in which the failure theshold must be met.
+	Duration time.Duration
+
 	// Threshold is the number of failures CircuitBreaker will allow before tripping
 	Threshold int64
 
-	failures int64
-
+	_failureTick unsafe.Pointer
 	*TrippableBreaker
 }
 
-// NewThresholdBreaker creates a new ThresholdBreaker with the given failure threshold.
-func NewThresholdBreaker(threshold int64) *ThresholdBreaker {
-	return &ThresholdBreaker{threshold, 0, NewTrippableBreaker(time.Millisecond * 500)}
+// NewFrequencyBreaker returns a new FrequencyBreaker with the given duration
+// and failure threshold. If a duration is specified as 0 then no duration will be used and
+// the behavior will be the same as a ThresholdBreaker
+func NewFrequencyBreaker(duration time.Duration, threshold int64) *FrequencyBreaker {
+	return &FrequencyBreaker{duration, threshold, nil, NewTrippableBreaker(time.Millisecond * 500)}
 }
 
-// Fail records a failure. If the failure count meets the threshold, the circuit breaker
-// will trip. If a BreakerTripped callback is available it will be run.
-func (cb *ThresholdBreaker) Fail() {
+// Fail records a failure. If the failure count meets the threshold within the duration,
+// the circuit breaker will trip. If a BreakerTripped callback is available it will be run.
+func (cb *FrequencyBreaker) Fail() {
 	if cb.Tripped() {
 		return
+	}
+
+	if cb.Duration > 0 {
+		cb.frequencyFail()
 	}
 
 	cb.TrippableBreaker.Fail()
 	failures := atomic.AddInt64(&cb.failures, 1)
 	if failures == cb.Threshold {
 		cb.Trip()
-		for _, f := range cb.breakerTripped {
-			go f()
-		}
 	}
 }
 
-// Reset will reset the circuit breaker. After Reset() is called, Tripped() will
-// return false. If a BreakerReset callback is available it will be run.
-func (cb *ThresholdBreaker) Reset() {
-	cb.TrippableBreaker.Reset()
-	atomic.SwapInt64(&cb.failures, 0)
+func (cb *FrequencyBreaker) frequencyFail() {
+	now := time.Now()
+	if cb._failureTick == nil {
+		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
+		return
+	}
+	if time.Since(cb.failureTick()) > cb.Duration {
+		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
+		atomic.SwapInt64(&cb.failures, 0)
+	}
 }
 
-// Failures returns the number of failures for this circuit breaker.
-func (cb *ThresholdBreaker) Failures() int64 {
-	return atomic.LoadInt64(&cb.failures)
-}
-
-// Call wraps the function the ThresholdBreaker will protect. A failure is recorded
-// whenever the function returns an error. If the threshold is met, the ThresholdBreaker
-// will trip.
-func (cb *ThresholdBreaker) Call(circuit func() error) error {
+// Call wraps the function the FrequencyBreaker will protect. A failure is recorded
+// whenever the function returns an error. If the threshold is met within the duration,
+// the FrequencyBreaker will trip.
+func (cb *FrequencyBreaker) Call(circuit func() error) error {
 	state := cb.state()
 
 	if state == open {
@@ -225,6 +229,24 @@ func (cb *ThresholdBreaker) Call(circuit func() error) error {
 	cb.Reset()
 
 	return nil
+}
+
+func (cb *FrequencyBreaker) failureTick() time.Time {
+	ptr := atomic.LoadPointer(&cb._failureTick)
+	return *(*time.Time)(ptr)
+}
+
+// ThresholdBreaker is a ResettingCircuitBreaker that will trip when its failure count
+// passes a given threshold. Clients of ThresholdBreaker can either manually call the
+// Fail function to record a failure, checking the tripped state themselves, or they
+// can use the Call function to wrap the ThresholdBreaker around a function call.
+type ThresholdBreaker struct {
+	*FrequencyBreaker
+}
+
+// NewThresholdBreaker creates a new ThresholdBreaker with the given failure threshold.
+func NewThresholdBreaker(threshold int64) *ThresholdBreaker {
+	return &ThresholdBreaker{NewFrequencyBreaker(0, threshold)}
 }
 
 // TimeoutBreaker is a ThresholdBreaker that will record a failure if the function
@@ -272,78 +294,6 @@ func (cb *TimeoutBreaker) Call(circuit func() error) error {
 		cb.ThresholdBreaker.Fail()
 		return ErrBreakerTimeout
 	}
-}
-
-// FrequencyBreaker is a ThresholdBreaker that will only trip if the threshold is met
-// within a certain amount of time.
-type FrequencyBreaker struct {
-	// Duration is the amount of time in which the failure theshold must be met.
-	Duration     time.Duration
-	_failureTick unsafe.Pointer
-	*ThresholdBreaker
-}
-
-// NewFrequencyBreaker returns a new FrequencyBreaker with the given duration
-// and failure threshold. If a duration is specified as 0 then no duration will be used and
-// the behavior will be the same as a ThresholdBreaker
-func NewFrequencyBreaker(duration time.Duration, threshold int64) *FrequencyBreaker {
-	return &FrequencyBreaker{duration, nil, NewThresholdBreaker(threshold)}
-}
-
-// Fail records a failure. If the failure count meets the threshold within the duration,
-// the circuit breaker will trip. If a BreakerTripped callback is available it will be run.
-func (cb *FrequencyBreaker) Fail() {
-	if cb._failureTick == nil {
-		now := time.Now()
-		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
-		cb.ThresholdBreaker.Fail()
-		return
-	}
-
-	lastTick := cb.failureTick()
-	since := time.Since(lastTick)
-	if since > cb.Duration {
-		now := time.Now()
-		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
-		atomic.SwapInt64(&cb.failures, 0)
-	}
-	cb.ThresholdBreaker.Fail()
-}
-
-// Call wraps the function the FrequencyBreaker will protect. A failure is recorded
-// whenever the function returns an error. If the threshold is met within the duration,
-// the FrequencyBreaker will trip.
-func (cb *FrequencyBreaker) Call(circuit func() error) error {
-	if cb.Duration == 0 {
-		return cb.ThresholdBreaker.Call(circuit)
-	}
-
-	state := cb.state()
-
-	if state == open {
-		return ErrBreakerOpen
-	}
-
-	err := circuit()
-
-	if err != nil {
-		if state == halfopen {
-			atomic.StoreInt64(&cb.halfOpens, 0)
-		}
-
-		cb.Fail()
-
-		return err
-	}
-
-	cb.Reset()
-
-	return nil
-}
-
-func (cb *FrequencyBreaker) failureTick() time.Time {
-	ptr := atomic.LoadPointer(&cb._failureTick)
-	return *(*time.Time)(ptr)
 }
 
 // NoOp returns a CircuitBreaker null object.  It implements the interface with
