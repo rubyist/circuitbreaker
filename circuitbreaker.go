@@ -123,8 +123,8 @@ func (cb *TrippableBreaker) Tripped() bool {
 }
 
 // Call runs the given function.  No wrapping is performed.
-func (cb *TrippableBreaker) Call(f func() error) error {
-	return f()
+func (cb *TrippableBreaker) Call(circuit func() error) error {
+	return circuit()
 }
 
 // Failures returns the number of failures for this circuit breaker.
