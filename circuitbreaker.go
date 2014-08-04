@@ -5,6 +5,22 @@
 // breaker will periodically allow the function to run and, if it is successful,
 // will start running the function again.
 //
+// Circuitbreaker includes three types of circuit breakers:
+//
+// A ThresholdBreaker will trip when the failure count reaches a given threshold.
+// It does not matter how long it takes to reach the threshold.
+//
+// A FrequencyBreaker will trip when the failure count reaches a given threshold
+// within a given time period.
+//
+// A TimeoutBreaker will trip when the failure count reaches a given threshold, with
+// the added feature that the remote call taking longer than a given timeout will
+// count as a failure.
+//
+// Other types of circuit breakers can be easily built. Embedding a TrippableBreaker
+// struct and providing the failure semantics with custom Fail() and Call() functions
+// are all that is typically needed.
+//
 // The package also provides a wrapper around an http.Client that wraps all of
 // the http.Client functions with a CircuitBreaker.
 //
