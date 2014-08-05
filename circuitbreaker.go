@@ -79,8 +79,6 @@ type TrippableBreaker struct {
 
 	_lastFailure   unsafe.Pointer
 	halfOpens      int64
-	breakerTripped []func()
-	breakerReset   []func()
 	tripped        int32
 	broken         int32
 	failures       int64
@@ -125,9 +123,6 @@ func (cb *TrippableBreaker) Trip() {
 	now := time.Now()
 	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
 	cb.sendEvent(BreakerTripped)
-	for _, f := range cb.breakerTripped {
-		go f()
-	}
 }
 
 // Reset will reset the circuit breaker. After Reset() is called, Tripped() will
@@ -137,9 +132,6 @@ func (cb *TrippableBreaker) Reset() {
 	atomic.StoreInt32(&cb.tripped, 0)
 	atomic.SwapInt64(&cb.failures, 0)
 	cb.sendEvent(BreakerReset)
-	for _, f := range cb.breakerReset {
-		go f()
-	}
 }
 
 // Tripped returns true if the circuit breaker is tripped, false if it is reset.
