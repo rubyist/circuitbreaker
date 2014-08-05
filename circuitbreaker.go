@@ -64,6 +64,7 @@ type CircuitBreaker interface {
 	Failures() int64
 	Trip()
 	Reset()
+	Break()
 	Ready() bool
 	Tripped() bool
 	Subscribe() <-chan BreakerEvent
@@ -81,6 +82,7 @@ type TrippableBreaker struct {
 	breakerTripped []func()
 	breakerReset   []func()
 	tripped        int32
+	broken         int32
 	failures       int64
 	eventReceivers []chan BreakerEvent
 }
@@ -131,6 +133,7 @@ func (cb *TrippableBreaker) Trip() {
 // Reset will reset the circuit breaker. After Reset() is called, Tripped() will
 // return false. If an OnReset callback is available it will be run.
 func (cb *TrippableBreaker) Reset() {
+	atomic.StoreInt32(&cb.broken, 0)
 	atomic.StoreInt32(&cb.tripped, 0)
 	atomic.SwapInt64(&cb.failures, 0)
 	cb.sendEvent(BreakerReset)
@@ -142,6 +145,13 @@ func (cb *TrippableBreaker) Reset() {
 // Tripped returns true if the circuit breaker is tripped, false if it is reset.
 func (cb *TrippableBreaker) Tripped() bool {
 	return cb.tripped == 1
+}
+
+// Break trips the circuit breaker and prevents it from auto resetting. Use this when
+// manual control over the circuit breaker state is needed.
+func (cb *TrippableBreaker) Break() {
+	atomic.StoreInt32(&cb.broken, 1)
+	cb.Trip()
 }
 
 // Call runs the given function.  No wrapping is performed.
@@ -179,6 +189,9 @@ func (cb *TrippableBreaker) Ready() bool {
 func (cb *TrippableBreaker) state() state {
 	tripped := cb.Tripped()
 	if tripped {
+		if cb.broken == 1 {
+			return open
+		}
 		since := time.Since(cb.lastFailure())
 		if since > cb.ResetTimeout {
 			if atomic.CompareAndSwapInt64(&cb.halfOpens, 0, 1) {
@@ -353,6 +366,7 @@ func (c *noOpCircuitBreaker) Call(f func() error) error {
 func (c *noOpCircuitBreaker) Fail()                           {}
 func (c *noOpCircuitBreaker) Trip()                           {}
 func (c *noOpCircuitBreaker) Reset()                          {}
+func (c *noOpCircuitBreaker) Break()                          {}
 func (c *noOpCircuitBreaker) Failures() int64                 { return 0 }
 func (c *noOpCircuitBreaker) Ready() bool                     { return true }
 func (c *noOpCircuitBreaker) Tripped() bool                   { return false }

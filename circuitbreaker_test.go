@@ -69,6 +69,23 @@ func TestTrippableBreakerState(t *testing.T) {
 	}
 }
 
+func TestTrippableBreakerManualBreak(t *testing.T) {
+	cb := NewTrippableBreaker(time.Millisecond * 10)
+	cb.Break()
+	time.Sleep(time.Millisecond * 11)
+
+	if cb.Ready() {
+		t.Fatal("expected breaker to still be tripped")
+	}
+
+	cb.Reset()
+	cb.Trip()
+	time.Sleep(time.Millisecond * 11)
+	if !cb.Ready() {
+		t.Fatal("expected breaker to be ready")
+	}
+}
+
 func TestThresholdBreaker(t *testing.T) {
 	cb := NewThresholdBreaker(2)
 
