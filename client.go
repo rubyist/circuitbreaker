@@ -69,8 +69,6 @@ func NewHostBasedHTTPClient(timeout time.Duration, threshold int64, client *http
 		cb, ok := c.breakers[host]
 		if !ok {
 			cb = NewTimeoutBreaker(timeout, threshold)
-			cb.OnTrip(brclient.runBreakerTripped)
-			cb.OnReset(brclient.runBreakerReset)
 			c.breakers[host] = cb
 		}
 		return cb
