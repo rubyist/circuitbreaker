@@ -67,8 +67,6 @@ type CircuitBreaker interface {
 	Ready() bool
 	Tripped() bool
 	Subscribe(chan BreakerEvent)
-	OnTrip(func())
-	OnReset(func())
 }
 
 // TrippableBreaker is a base for building trippable circuit breakers. It keeps
@@ -361,6 +359,4 @@ func (c *noOpCircuitBreaker) Reset()                                {}
 func (c *noOpCircuitBreaker) Failures() int64                       { return 0 }
 func (c *noOpCircuitBreaker) Ready() bool                           { return true }
 func (c *noOpCircuitBreaker) Tripped() bool                         { return false }
-func (c *noOpCircuitBreaker) OnTrip(f func())                       {}
-func (c *noOpCircuitBreaker) OnReset(f func())                      {}
 func (cb *noOpCircuitBreaker) Subscribe(receiver chan BreakerEvent) {}
