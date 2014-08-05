@@ -66,7 +66,7 @@ type CircuitBreaker interface {
 	Reset()
 	Ready() bool
 	Tripped() bool
-	Subscribe(chan BreakerEvent)
+	Subscribe() chan BreakerEvent
 }
 
 // TrippableBreaker is a base for building trippable circuit breakers. It keeps
@@ -87,10 +87,7 @@ type TrippableBreaker struct {
 
 func (cb *TrippableBreaker) sendEvent(event BreakerEvent) {
 	for _, receiver := range cb.eventReceivers {
-		select {
-		case receiver <- event:
-		default:
-		}
+		receiver <- event
 	}
 }
 
@@ -99,8 +96,22 @@ func NewTrippableBreaker(resetTimeout time.Duration) *TrippableBreaker {
 	return &TrippableBreaker{ResetTimeout: resetTimeout}
 }
 
-func (cb *TrippableBreaker) Subscribe(receiver chan BreakerEvent) {
-	cb.eventReceivers = append(cb.eventReceivers, receiver)
+func (cb *TrippableBreaker) Subscribe() chan BreakerEvent {
+	eventReader := make(chan BreakerEvent)
+	output := make(chan BreakerEvent, 100)
+
+	go func() {
+		for v := range eventReader {
+			select {
+			case output <- v:
+			default:
+				<-output
+				output <- v
+			}
+		}
+	}()
+	cb.eventReceivers = append(cb.eventReceivers, eventReader)
+	return output
 }
 
 // Trip will trip the circuit breaker. After Trip() is called, Tripped() will
@@ -353,10 +364,10 @@ func (c *noOpCircuitBreaker) Call(f func() error) error {
 	return f()
 }
 
-func (c *noOpCircuitBreaker) Fail()                                 {}
-func (c *noOpCircuitBreaker) Trip()                                 {}
-func (c *noOpCircuitBreaker) Reset()                                {}
-func (c *noOpCircuitBreaker) Failures() int64                       { return 0 }
-func (c *noOpCircuitBreaker) Ready() bool                           { return true }
-func (c *noOpCircuitBreaker) Tripped() bool                         { return false }
-func (cb *noOpCircuitBreaker) Subscribe(receiver chan BreakerEvent) {}
+func (c *noOpCircuitBreaker) Fail()                         {}
+func (c *noOpCircuitBreaker) Trip()                         {}
+func (c *noOpCircuitBreaker) Reset()                        {}
+func (c *noOpCircuitBreaker) Failures() int64               { return 0 }
+func (c *noOpCircuitBreaker) Ready() bool                   { return true }
+func (c *noOpCircuitBreaker) Tripped() bool                 { return false }
+func (cb *noOpCircuitBreaker) Subscribe() chan BreakerEvent { return nil }

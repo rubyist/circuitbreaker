@@ -49,8 +49,7 @@ func NewPanel() *Panel {
 func (p *Panel) Add(name string, cb CircuitBreaker) {
 	p.Circuits[name] = cb
 
-	events := make(chan BreakerEvent, 100)
-	cb.Subscribe(events)
+	events := cb.Subscribe()
 
 	go func() {
 		for {

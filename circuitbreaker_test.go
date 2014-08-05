@@ -24,38 +24,28 @@ func TestCircuitBreakerTripping(t *testing.T) {
 	}
 }
 
-func receiveEvent(r chan BreakerEvent) BreakerEvent {
-	select {
-	case e := <-r:
-		return e
-	default:
-		return -1
-	}
-}
-
 func TestCircuitBreakerEvents(t *testing.T) {
-	events := make(chan BreakerEvent, 100)
 	cb := NewTrippableBreaker(time.Millisecond * 100)
-	cb.Subscribe(events)
+	events := cb.Subscribe()
 
 	cb.Trip()
-	if e := receiveEvent(events); e != BreakerTripped {
+	if e := <-events; e != BreakerTripped {
 		t.Fatalf("expected to receive a trip event, got %d", e)
 	}
 
 	time.Sleep(cb.ResetTimeout)
 	cb.Ready()
-	if e := receiveEvent(events); e != BreakerReady {
+	if e := <-events; e != BreakerReady {
 		t.Fatalf("expected to receive a breaker ready event, got %d", e)
 	}
 
 	cb.Reset()
-	if e := receiveEvent(events); e != BreakerReset {
+	if e := <-events; e != BreakerReset {
 		t.Fatalf("expected to receive a reset event, got %d", e)
 	}
 
 	cb.Fail()
-	if e := receiveEvent(events); e != BreakerFail {
+	if e := <-events; e != BreakerFail {
 		t.Fatalf("expected to receive a fail event, got %d", e)
 	}
 }
