@@ -2,6 +2,7 @@ package circuitbreaker
 
 import (
 	"fmt"
+	"github.com/peterbourgon/g2s"
 	"io/ioutil"
 	"log"
 	"time"
@@ -74,19 +75,73 @@ func ExampleHTTPClient() {
 	fmt.Printf("%s", resource)
 }
 
-func ExampleCircuitBreaker_callbacks() {
+func ExampleCircuitBreaker_events() {
 	// This example demonstrates the BreakerTripped and BreakerReset callbacks. These are
 	// available on all breaker types.
 	breaker := NewThresholdBreaker(1)
-	breaker.OnTrip(func() {
-		log.Println("breaker tripped")
-	})
-	breaker.OnReset(func() {
-		log.Println("breaker reset")
-	})
+	events := breaker.Subscribe()
+
+	go func() {
+		for {
+			e := <-events
+			switch e {
+			case BreakerTripped:
+				log.Println("breaker tripped")
+			case BreakerReset:
+				log.Println("breaker reset")
+			case BreakerFail:
+				log.Println("breaker fail")
+			case BreakerReady:
+				log.Println("breaker ready")
+			}
+		}
+	}()
 
 	breaker.Fail()
 	breaker.Reset()
+}
+
+func ExamplePanel() {
+	// This example demonstrates using a Panel to aggregate and manage circuit breakers.
+	breaker1 := NewThresholdBreaker(10)
+	breaker2 := NewFrequencyBreaker(time.Minute, 10)
+
+	panel := NewPanel()
+	panel.Add("breaker1", breaker1)
+	panel.Add("breaker2", breaker2)
+
+	// Elsewhere in the code ...
+	b1 := panel.Get("breaker1")
+	b1.Call(func() error {
+		// Do some work
+		return nil
+	})
+
+	b2 := panel.Get("breaker2")
+	b2.Call(func() error {
+		// Do some work
+		return nil
+	})
+}
+
+func ExamplePanel_stats() {
+	// This example demonstrates how to push circuit breaker stats to statsd via a Panel.
+	// This example uses g2s. Anything conforming to the Statter interface can be used.
+	s, err := g2s.Dial("udp", "statsd-server:8125")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	breaker := NewThresholdBreaker(10)
+	panel := NewPanel()
+	panel.Statter = s
+	panel.StatsPrefixf = "sys.production"
+	panel.Add("x", breaker)
+
+	breaker.Trip()  // sys.production.circuit.x.tripped
+	breaker.Reset() // sys.production.circuit.x.reset, sys.production.circuit.x.trip-time
+	breaker.Fail()  // sys.production.circuit.x.fail
+	breaker.Ready() // sys.production.circuit.x.ready (if it's tripped and ready to retry)
 }
 
 func remoteCall() error {

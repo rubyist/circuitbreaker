@@ -2,8 +2,8 @@ package circuitbreaker
 
 import (
 	"reflect"
-	"sync"
 	"testing"
+	"time"
 )
 
 func TestPanelGet(t *testing.T) {
@@ -69,85 +69,66 @@ func TestPanelAdd(t *testing.T) {
 	}
 }
 
-func TestPanelCallbacks(t *testing.T) {
-	tripCalled := false
-	resetCalled := false
-	var wg sync.WaitGroup
-	wg.Add(2)
-
+func TestPanelStats(t *testing.T) {
+	statter := newTestStatter()
 	p := NewPanel()
-	p.BreakerTripped = func(string) {
-		tripCalled = true
-		wg.Done()
-	}
-	p.BreakerReset = func(string) {
-		resetCalled = true
-		wg.Done()
-	}
-
-	rb := NewThresholdBreaker(1)
+	p.Statter = statter
+	rb := NewTrippableBreaker(time.Millisecond * 10)
 	p.Add("breaker", rb)
+
+	rb.Fail()
 	rb.Trip()
+	time.Sleep(time.Millisecond * 11)
+	rb.Ready()
 	rb.Reset()
 
-	wg.Wait()
+	time.Sleep(time.Millisecond)
 
-	if !tripCalled {
-		t.Fatal("expected panel trip callback to run")
+	tripCount := statter.Counts["circuit.breaker.tripped"]
+	if tripCount != 1 {
+		t.Fatalf("expected trip count to be 1, got %d", tripCount)
 	}
 
-	if !resetCalled {
-		t.Fatal("expected panel reset callback to run")
+	resetCount := statter.Counts["circuit.breaker.reset"]
+	if resetCount != 1 {
+		t.Fatalf("expected reset count to be 1, got %d", resetCount)
+	}
+
+	tripTime := statter.Timings["circuit.breaker.trip-time"]
+	if tripTime == 0 {
+		t.Fatalf("expected trip time to have been counted, got %v", tripTime)
+	}
+
+	failCount := statter.Counts["circuit.breaker.fail"]
+	if failCount != 1 {
+		t.Fatalf("expected fail count to be 1, got %d", failCount)
+	}
+
+	readyCount := statter.Counts["circuit.breaker.ready"]
+	if readyCount != 1 {
+		t.Fatalf("expected ready count to be 1, got %d", readyCount)
 	}
 }
 
-func TestPanelCallbacksDoNotOverwriteBreakerCallbacks(t *testing.T) {
-	panelTripCalled := false
-	panelResetCalled := false
-	breakerTripCalled := false
-	breakerResetCalled := false
+type testStatter struct {
+	Counts  map[string]int
+	Timings map[string]time.Duration
+}
 
-	var wg sync.WaitGroup
-	wg.Add(4)
+func newTestStatter() *testStatter {
+	return &testStatter{make(map[string]int), make(map[string]time.Duration)}
+}
 
-	p := NewPanel()
-	p.BreakerTripped = func(string) {
-		panelTripCalled = true
-		wg.Done()
-	}
-	p.BreakerReset = func(string) {
-		panelResetCalled = true
-		wg.Done()
-	}
-
-	rb := NewThresholdBreaker(1)
-	rb.OnTrip(func() {
-		breakerTripCalled = true
-		wg.Done()
-	})
-	rb.OnReset(func() {
-		breakerResetCalled = true
-		wg.Done()
-	})
-	p.Add("breaker", rb)
-	rb.Trip()
-	rb.Reset()
-
-	wg.Wait()
-
-	if !panelTripCalled {
-		t.Fatal("expected panel trip callback to run")
-	}
-
-	if !panelResetCalled {
-		t.Fatal("expected panel reset callback to run")
-	}
-
-	if !breakerTripCalled {
-		t.Fatal("expected breaker trip callback to run")
-	}
-
-	if !breakerResetCalled {
-		t.Fatal("expected breaker reset callback to run")
+func (s *testStatter) Counter(sampleRate float32, bucket string, n ...int) {
+	for _, x := range n {
+		s.Counts[bucket] += x
 	}
 }
+
+func (s *testStatter) Timing(sampleRate float32, bucket string, d ...time.Duration) {
+	for _, x := range d {
+		s.Timings[bucket] += x
+	}
+}
+
+func (*testStatter) Gauge(sampleRate float32, bucket string, value ...string) {}

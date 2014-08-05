@@ -34,15 +34,13 @@ Here is a quick example of what circuitbreaker provides
 // Creates a circuit breaker that will trip if the function fails 10 times
 cb := NewThresholdBreaker(10)
 
-cb.OnTrip(func() {
-	// This function will be called every time the circuit breaker moves
-	// from reset to tripped.
-})
-
-cb.OnReset(func() {
-	// This function will be called every time the circuit breaker moves
-	// from tripped to reset.
-})
+events := cb.Subscribe()
+go func() {
+  for {
+    e := <-events
+    // Monitor breaker events like BreakerTripped, BreakerReset, BreakerFail, BreakerReady
+  }
+}()
 
 cb.Call(func() error {
 	// This is where you'll do some remote call
