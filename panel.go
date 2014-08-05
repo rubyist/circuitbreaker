@@ -1,6 +1,19 @@
 package circuitbreaker
 
+import (
+	"fmt"
+	"time"
+)
+
 var panelCallback = func(name string) {}
+
+var defaultStatsPrefixf = "circuit.%s"
+
+type Statter interface {
+	Counter(sampleRate float32, bucket string, n ...int)
+	Timing(sampleRate float32, bucket string, d ...time.Duration)
+	Gauge(sampleRate float32, bucket string, value ...string)
+}
 
 // Panel tracks a group of circuit breakers by name.
 type Panel struct {
@@ -15,10 +28,18 @@ type Panel struct {
 	BreakerReset func(name string)
 
 	Circuits map[string]CircuitBreaker
+
+	Statter      Statter
+	StatsPrefixf string
 }
 
 func NewPanel() *Panel {
-	return &Panel{panelCallback, panelCallback, make(map[string]CircuitBreaker)}
+	return &Panel{
+		panelCallback,
+		panelCallback,
+		make(map[string]CircuitBreaker),
+		&noopStatter{},
+		defaultStatsPrefixf}
 }
 
 // Add sets the name as a reference to the given circuit breaker.
@@ -26,10 +47,12 @@ func (p *Panel) Add(name string, cb CircuitBreaker) {
 	p.Circuits[name] = cb
 
 	cb.OnTrip(func() {
+		p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".tripped", 1)
 		p.BreakerTripped(name)
 	})
 
 	cb.OnReset(func() {
+		p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".reset", 1)
 		p.BreakerReset(name)
 	})
 }
@@ -55,3 +78,10 @@ func (p *Panel) GetAll(names ...string) *Panel {
 
 	return newPanel
 }
+
+type noopStatter struct {
+}
+
+func (*noopStatter) Counter(sampleRate float32, bucket string, n ...int)          {}
+func (*noopStatter) Timing(sampleRate float32, bucket string, d ...time.Duration) {}
+func (*noopStatter) Gauge(sampleRate float32, bucket string, value ...string)     {}

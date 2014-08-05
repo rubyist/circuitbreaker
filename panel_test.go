@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestPanelGet(t *testing.T) {
@@ -151,3 +152,48 @@ func TestPanelCallbacksDoNotOverwriteBreakerCallbacks(t *testing.T) {
 		t.Fatal("expected breaker reset callback to run")
 	}
 }
+
+func TestPanelStatsTripsAndResets(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	statter := newTestStatter()
+	p := NewPanel()
+	p.BreakerTripped = func(string) { wg.Done() }
+	p.BreakerReset = func(string) { wg.Done() }
+	p.Statter = statter
+	rb := NewThresholdBreaker(1)
+	p.Add("breaker", rb)
+
+	rb.Trip()
+	rb.Reset()
+
+	wg.Wait()
+
+	tripCount := statter.Counts["circuit.breaker.tripped"]
+	if tripCount != 1 {
+		t.Fatalf("expected trip count to be 1, got %d", tripCount)
+	}
+
+	resetCount := statter.Counts["circuit.breaker.reset"]
+	if resetCount != 1 {
+		t.Fatalf("expected reset count to be 1, got %d", resetCount)
+	}
+}
+
+type testStatter struct {
+	Counts map[string]int
+}
+
+func newTestStatter() *testStatter {
+	return &testStatter{make(map[string]int)}
+}
+
+func (s *testStatter) Counter(sampleRate float32, bucket string, n ...int) {
+	for _, x := range n {
+		s.Counts[bucket] += x
+	}
+}
+
+func (*testStatter) Timing(sampleRate float32, bucket string, d ...time.Duration) {}
+func (*testStatter) Gauge(sampleRate float32, bucket string, value ...string)     {}
