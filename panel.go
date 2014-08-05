@@ -31,6 +31,8 @@ type Panel struct {
 
 	Statter      Statter
 	StatsPrefixf string
+
+	lastTripTimes map[string]time.Time
 }
 
 func NewPanel() *Panel {
@@ -39,7 +41,8 @@ func NewPanel() *Panel {
 		panelCallback,
 		make(map[string]CircuitBreaker),
 		&noopStatter{},
-		defaultStatsPrefixf}
+		defaultStatsPrefixf,
+		make(map[string]time.Time)}
 }
 
 // Add sets the name as a reference to the given circuit breaker.
@@ -48,11 +51,21 @@ func (p *Panel) Add(name string, cb CircuitBreaker) {
 
 	cb.OnTrip(func() {
 		p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".tripped", 1)
+		p.lastTripTimes[name] = time.Now()
 		p.BreakerTripped(name)
 	})
 
 	cb.OnReset(func() {
-		p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".reset", 1)
+		bucket := fmt.Sprintf(p.StatsPrefixf, name)
+
+		p.Statter.Counter(1.0, bucket+".reset", 1)
+
+		lastTrip := p.lastTripTimes[name]
+		if !lastTrip.IsZero() {
+			p.Statter.Timing(1.0, bucket+".trip-time", time.Since(lastTrip))
+			p.lastTripTimes[name] = time.Time{}
+		}
+
 		p.BreakerReset(name)
 	})
 }
