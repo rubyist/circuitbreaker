@@ -33,6 +33,15 @@ import (
 	"unsafe"
 )
 
+type BreakerEvent int
+
+const (
+	BreakerTripped BreakerEvent = iota
+	BreakerReset   BreakerEvent = iota
+	BreakerFail    BreakerEvent = iota
+	BreakerReady   BreakerEvent = iota
+)
+
 type state int
 
 const (
@@ -57,6 +66,7 @@ type CircuitBreaker interface {
 	Reset()
 	Ready() bool
 	Tripped() bool
+	Subscribe(chan BreakerEvent)
 	OnTrip(func())
 	OnReset(func())
 }
@@ -74,6 +84,16 @@ type TrippableBreaker struct {
 	breakerReset   []func()
 	tripped        int32
 	failures       int64
+	eventReceivers []chan BreakerEvent
+}
+
+func (cb *TrippableBreaker) sendEvent(event BreakerEvent) {
+	for _, receiver := range cb.eventReceivers {
+		select {
+		case receiver <- event:
+		default:
+		}
+	}
 }
 
 // NewResettingBreaker returns a new ResettingBreaker with the given reset timeout
@@ -81,11 +101,17 @@ func NewTrippableBreaker(resetTimeout time.Duration) *TrippableBreaker {
 	return &TrippableBreaker{ResetTimeout: resetTimeout}
 }
 
+func (cb *TrippableBreaker) Subscribe(receiver chan BreakerEvent) {
+	cb.eventReceivers = append(cb.eventReceivers, receiver)
+}
+
 // Trip will trip the circuit breaker. After Trip() is called, Tripped() will
 // return true. If an OnTrip callback is available it will be run.
 func (cb *TrippableBreaker) Trip() {
-	cb.Fail()
 	atomic.StoreInt32(&cb.tripped, 1)
+	now := time.Now()
+	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
+	cb.sendEvent(BreakerTripped)
 	for _, f := range cb.breakerTripped {
 		go f()
 	}
@@ -96,6 +122,7 @@ func (cb *TrippableBreaker) Trip() {
 func (cb *TrippableBreaker) Reset() {
 	atomic.StoreInt32(&cb.tripped, 0)
 	atomic.SwapInt64(&cb.failures, 0)
+	cb.sendEvent(BreakerReset)
 	for _, f := range cb.breakerReset {
 		go f()
 	}
@@ -136,6 +163,7 @@ func (cb *TrippableBreaker) Failures() int64 {
 func (cb *TrippableBreaker) Fail() {
 	now := time.Now()
 	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
+	cb.sendEvent(BreakerFail)
 }
 
 // Ready will return true if the circuit breaker is ready to call the function.
@@ -143,6 +171,9 @@ func (cb *TrippableBreaker) Fail() {
 // the call for auto resetting.
 func (cb *TrippableBreaker) Ready() bool {
 	state := cb.state()
+	if state == halfopen {
+		cb.sendEvent(BreakerReady)
+	}
 	return state == closed || state == halfopen
 }
 
@@ -324,11 +355,12 @@ func (c *noOpCircuitBreaker) Call(f func() error) error {
 	return f()
 }
 
-func (c *noOpCircuitBreaker) Fail()            {}
-func (c *noOpCircuitBreaker) Trip()            {}
-func (c *noOpCircuitBreaker) Reset()           {}
-func (c *noOpCircuitBreaker) Failures() int64  { return 0 }
-func (c *noOpCircuitBreaker) Ready() bool      { return true }
-func (c *noOpCircuitBreaker) Tripped() bool    { return false }
-func (c *noOpCircuitBreaker) OnTrip(f func())  {}
-func (c *noOpCircuitBreaker) OnReset(f func()) {}
+func (c *noOpCircuitBreaker) Fail()                                 {}
+func (c *noOpCircuitBreaker) Trip()                                 {}
+func (c *noOpCircuitBreaker) Reset()                                {}
+func (c *noOpCircuitBreaker) Failures() int64                       { return 0 }
+func (c *noOpCircuitBreaker) Ready() bool                           { return true }
+func (c *noOpCircuitBreaker) Tripped() bool                         { return false }
+func (c *noOpCircuitBreaker) OnTrip(f func())                       {}
+func (c *noOpCircuitBreaker) OnReset(f func())                      {}
+func (cb *noOpCircuitBreaker) Subscribe(receiver chan BreakerEvent) {}

@@ -2,7 +2,6 @@ package circuitbreaker
 
 import (
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 )
@@ -25,34 +24,39 @@ func TestCircuitBreakerTripping(t *testing.T) {
 	}
 }
 
-func TestCircuitBreakerCallbacks(t *testing.T) {
-	trippedCalled := false
-	resetCalled := false
+func receiveEvent(r chan BreakerEvent) BreakerEvent {
+	select {
+	case e := <-r:
+		return e
+	default:
+		return -1
+	}
+}
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	cb := &TrippableBreaker{}
-	cb.OnTrip(func() {
-		trippedCalled = true
-		wg.Done()
-	})
-	cb.OnReset(func() {
-		resetCalled = true
-		wg.Done()
-	})
+func TestCircuitBreakerEvents(t *testing.T) {
+	events := make(chan BreakerEvent, 100)
+	cb := NewTrippableBreaker(time.Millisecond * 100)
+	cb.Subscribe(events)
 
 	cb.Trip()
-	cb.Reset()
-
-	wg.Wait()
-
-	if !trippedCalled {
-		t.Fatal("expected BreakerOpen to have been called")
+	if e := receiveEvent(events); e != BreakerTripped {
+		t.Fatalf("expected to receive a trip event, got %d", e)
 	}
 
-	if !resetCalled {
-		t.Fatal("expected BreakerClosed to have been called")
+	time.Sleep(cb.ResetTimeout)
+	cb.Ready()
+	if e := receiveEvent(events); e != BreakerReady {
+		t.Fatalf("expected to receive a breaker ready event, got %d", e)
+	}
+
+	cb.Reset()
+	if e := receiveEvent(events); e != BreakerReset {
+		t.Fatalf("expected to receive a reset event, got %d", e)
+	}
+
+	cb.Fail()
+	if e := receiveEvent(events); e != BreakerFail {
+		t.Fatalf("expected to receive a fail event, got %d", e)
 	}
 }
 
@@ -139,12 +143,13 @@ func TestThresholdBreakerResets(t *testing.T) {
 	}
 
 	cb := NewThresholdBreaker(1)
+	cb.ResetTimeout = time.Millisecond * 100
 	err := cb.Call(circuit)
 	if err == nil {
 		t.Fatal("Expected cb to return an error")
 	}
 
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(time.Millisecond * 100)
 	err = cb.Call(circuit)
 	if err != nil {
 		t.Fatal("Expected cb to be successful")
@@ -190,13 +195,13 @@ func TestFrequencyBreakerTripping(t *testing.T) {
 }
 
 func TestFrequencyBreakerNotTripping(t *testing.T) {
-	cb := NewFrequencyBreaker(time.Millisecond*200, 2)
+	cb := NewFrequencyBreaker(time.Millisecond*100, 2)
 	circuit := func() error {
 		return fmt.Errorf("error")
 	}
 
 	cb.Call(circuit)
-	time.Sleep(time.Millisecond * 210)
+	time.Sleep(time.Millisecond * 105)
 	cb.Call(circuit)
 
 	if cb.Tripped() {
