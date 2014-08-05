@@ -43,9 +43,12 @@ func (p *Panel) Add(name string, cb CircuitBreaker) {
 			switch e {
 			case BreakerTripped:
 				p.breakerTripped(name)
-
 			case BreakerReset:
 				p.breakerReset(name)
+			case BreakerFail:
+				p.breakerFail(name)
+			case BreakerReady:
+				p.breakerReady(name)
 			}
 		}
 	}()
@@ -66,6 +69,14 @@ func (p *Panel) breakerReset(name string) {
 		p.Statter.Timing(1.0, bucket+".trip-time", time.Since(lastTrip))
 		p.lastTripTimes[name] = time.Time{}
 	}
+}
+
+func (p *Panel) breakerFail(name string) {
+	p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".fail", 1)
+}
+
+func (p *Panel) breakerReady(name string) {
+	p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".ready", 1)
 }
 
 // Get retrieves a circuit breaker by name.  If no circuit breaker exists, it

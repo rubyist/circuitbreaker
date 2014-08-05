@@ -73,10 +73,13 @@ func TestPanelStats(t *testing.T) {
 	statter := newTestStatter()
 	p := NewPanel()
 	p.Statter = statter
-	rb := NewThresholdBreaker(1)
+	rb := NewTrippableBreaker(time.Millisecond * 10)
 	p.Add("breaker", rb)
 
+	rb.Fail()
 	rb.Trip()
+	time.Sleep(time.Millisecond * 11)
+	rb.Ready()
 	rb.Reset()
 
 	time.Sleep(time.Millisecond)
@@ -94,6 +97,16 @@ func TestPanelStats(t *testing.T) {
 	tripTime := statter.Timings["circuit.breaker.trip-time"]
 	if tripTime == 0 {
 		t.Fatalf("expected trip time to have been counted, got %v", tripTime)
+	}
+
+	failCount := statter.Counts["circuit.breaker.fail"]
+	if failCount != 1 {
+		t.Fatalf("expected fail count to be 1, got %d", failCount)
+	}
+
+	readyCount := statter.Counts["circuit.breaker.ready"]
+	if readyCount != 1 {
+		t.Fatalf("expected ready count to be 1, got %d", readyCount)
 	}
 }
 
