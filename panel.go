@@ -49,25 +49,41 @@ func NewPanel() *Panel {
 func (p *Panel) Add(name string, cb CircuitBreaker) {
 	p.Circuits[name] = cb
 
-	cb.OnTrip(func() {
-		p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".tripped", 1)
-		p.lastTripTimes[name] = time.Now()
-		p.BreakerTripped(name)
-	})
+	events := make(chan BreakerEvent, 100)
+	cb.Subscribe(events)
 
-	cb.OnReset(func() {
-		bucket := fmt.Sprintf(p.StatsPrefixf, name)
+	go func() {
+		for {
+			e := <-events
+			switch e {
+			case BreakerTripped:
+				p.breakerTripped(name)
 
-		p.Statter.Counter(1.0, bucket+".reset", 1)
-
-		lastTrip := p.lastTripTimes[name]
-		if !lastTrip.IsZero() {
-			p.Statter.Timing(1.0, bucket+".trip-time", time.Since(lastTrip))
-			p.lastTripTimes[name] = time.Time{}
+			case BreakerReset:
+				p.breakerReset(name)
+			}
 		}
+	}()
+}
 
-		p.BreakerReset(name)
-	})
+func (p *Panel) breakerTripped(name string) {
+	p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".tripped", 1)
+	p.lastTripTimes[name] = time.Now()
+	p.BreakerTripped(name)
+}
+
+func (p *Panel) breakerReset(name string) {
+	bucket := fmt.Sprintf(p.StatsPrefixf, name)
+
+	p.Statter.Counter(1.0, bucket+".reset", 1)
+
+	lastTrip := p.lastTripTimes[name]
+	if !lastTrip.IsZero() {
+		p.Statter.Timing(1.0, bucket+".trip-time", time.Since(lastTrip))
+		p.lastTripTimes[name] = time.Time{}
+	}
+
+	p.BreakerReset(name)
 }
 
 // Get retrieves a circuit breaker by name.  If no circuit breaker exists, it
