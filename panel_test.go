@@ -2,7 +2,6 @@ package circuitbreaker
 
 import (
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 )
@@ -70,97 +69,9 @@ func TestPanelAdd(t *testing.T) {
 	}
 }
 
-func TestPanelCallbacks(t *testing.T) {
-	tripCalled := false
-	resetCalled := false
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	p := NewPanel()
-	p.BreakerTripped = func(string) {
-		tripCalled = true
-		wg.Done()
-	}
-	p.BreakerReset = func(string) {
-		resetCalled = true
-		wg.Done()
-	}
-
-	rb := NewThresholdBreaker(1)
-	p.Add("breaker", rb)
-	rb.Trip()
-	rb.Reset()
-
-	wg.Wait()
-
-	if !tripCalled {
-		t.Fatal("expected panel trip callback to run")
-	}
-
-	if !resetCalled {
-		t.Fatal("expected panel reset callback to run")
-	}
-}
-
-func TestPanelCallbacksDoNotOverwriteBreakerCallbacks(t *testing.T) {
-	panelTripCalled := false
-	panelResetCalled := false
-	breakerTripCalled := false
-	breakerResetCalled := false
-
-	var wg sync.WaitGroup
-	wg.Add(4)
-
-	p := NewPanel()
-	p.BreakerTripped = func(string) {
-		panelTripCalled = true
-		wg.Done()
-	}
-	p.BreakerReset = func(string) {
-		panelResetCalled = true
-		wg.Done()
-	}
-
-	rb := NewThresholdBreaker(1)
-	rb.OnTrip(func() {
-		breakerTripCalled = true
-		wg.Done()
-	})
-	rb.OnReset(func() {
-		breakerResetCalled = true
-		wg.Done()
-	})
-	p.Add("breaker", rb)
-	rb.Trip()
-	rb.Reset()
-
-	wg.Wait()
-
-	if !panelTripCalled {
-		t.Fatal("expected panel trip callback to run")
-	}
-
-	if !panelResetCalled {
-		t.Fatal("expected panel reset callback to run")
-	}
-
-	if !breakerTripCalled {
-		t.Fatal("expected breaker trip callback to run")
-	}
-
-	if !breakerResetCalled {
-		t.Fatal("expected breaker reset callback to run")
-	}
-}
-
 func TestPanelStats(t *testing.T) {
-	var wg sync.WaitGroup
-	wg.Add(2)
-
 	statter := newTestStatter()
 	p := NewPanel()
-	p.BreakerTripped = func(string) { wg.Done() }
-	p.BreakerReset = func(string) { wg.Done() }
 	p.Statter = statter
 	rb := NewThresholdBreaker(1)
 	p.Add("breaker", rb)
@@ -168,7 +79,7 @@ func TestPanelStats(t *testing.T) {
 	rb.Trip()
 	rb.Reset()
 
-	wg.Wait()
+	time.Sleep(time.Millisecond)
 
 	tripCount := statter.Counts["circuit.breaker.tripped"]
 	if tripCount != 1 {

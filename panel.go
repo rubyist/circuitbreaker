@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-var panelCallback = func(name string) {}
-
 var defaultStatsPrefixf = "circuit.%s"
 
 type Statter interface {
@@ -17,16 +15,6 @@ type Statter interface {
 
 // Panel tracks a group of circuit breakers by name.
 type Panel struct {
-	// BreakerTripped, if set, will be called whenever the CircuitBreaker
-	// moves from the reset state to the tripped state. The name of the
-	// CircuitBreaker is passed. The function will be run in a goroutine.
-	BreakerTripped func(name string)
-
-	// BreakerReset, if set, will be called whenever the CircuitBreaker
-	// moves from the tripped state to the reset state. The name of the
-	// CircuitBreaker is passed. The function will be run in a goroutine.
-	BreakerReset func(name string)
-
 	Circuits map[string]CircuitBreaker
 
 	Statter      Statter
@@ -37,8 +25,6 @@ type Panel struct {
 
 func NewPanel() *Panel {
 	return &Panel{
-		panelCallback,
-		panelCallback,
 		make(map[string]CircuitBreaker),
 		&noopStatter{},
 		defaultStatsPrefixf,
@@ -68,7 +54,6 @@ func (p *Panel) Add(name string, cb CircuitBreaker) {
 func (p *Panel) breakerTripped(name string) {
 	p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".tripped", 1)
 	p.lastTripTimes[name] = time.Now()
-	p.BreakerTripped(name)
 }
 
 func (p *Panel) breakerReset(name string) {
@@ -81,8 +66,6 @@ func (p *Panel) breakerReset(name string) {
 		p.Statter.Timing(1.0, bucket+".trip-time", time.Since(lastTrip))
 		p.lastTripTimes[name] = time.Time{}
 	}
-
-	p.BreakerReset(name)
 }
 
 // Get retrieves a circuit breaker by name.  If no circuit breaker exists, it
