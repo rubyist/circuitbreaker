@@ -2,6 +2,7 @@ package circuitbreaker
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -21,14 +22,15 @@ type Panel struct {
 	StatsPrefixf string
 
 	lastTripTimes map[string]time.Time
+	tripTimesLock sync.RWMutex
 }
 
 func NewPanel() *Panel {
 	return &Panel{
-		make(map[string]CircuitBreaker),
-		&noopStatter{},
-		defaultStatsPrefixf,
-		make(map[string]time.Time)}
+		Circuits:      make(map[string]CircuitBreaker),
+		Statter:       &noopStatter{},
+		StatsPrefixf:  defaultStatsPrefixf,
+		lastTripTimes: make(map[string]time.Time)}
 }
 
 // Add sets the name as a reference to the given circuit breaker.
@@ -56,7 +58,9 @@ func (p *Panel) Add(name string, cb CircuitBreaker) {
 
 func (p *Panel) breakerTripped(name string) {
 	p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".tripped", 1)
+	p.tripTimesLock.Lock()
 	p.lastTripTimes[name] = time.Now()
+	p.tripTimesLock.Unlock()
 }
 
 func (p *Panel) breakerReset(name string) {
@@ -64,10 +68,15 @@ func (p *Panel) breakerReset(name string) {
 
 	p.Statter.Counter(1.0, bucket+".reset", 1)
 
+	p.tripTimesLock.RLock()
 	lastTrip := p.lastTripTimes[name]
+	p.tripTimesLock.RUnlock()
+
 	if !lastTrip.IsZero() {
 		p.Statter.Timing(1.0, bucket+".trip-time", time.Since(lastTrip))
+		p.tripTimesLock.Lock()
 		p.lastTripTimes[name] = time.Time{}
+		p.tripTimesLock.Unlock()
 	}
 }
 
