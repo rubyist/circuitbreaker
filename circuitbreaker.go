@@ -239,6 +239,15 @@ func (cb *FrequencyBreaker) Fail() {
 	}
 }
 
+// Failures returns the number of failures for this circuit breaker. The failure count
+// for a FrequencyBreaker resets when the duration expires.
+func (cb *FrequencyBreaker) Failures() int64 {
+	if time.Since(cb.failureTick()) > cb.Duration {
+		return 0
+	}
+	return cb.TrippableBreaker.Failures()
+}
+
 func (cb *FrequencyBreaker) frequencyFail() {
 	now := time.Now()
 	if cb._failureTick == nil {

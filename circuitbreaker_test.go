@@ -216,6 +216,18 @@ func TestFrequencyBreakerNotTripping(t *testing.T) {
 	}
 }
 
+func TestFrequencyBreakerFailures(t *testing.T) {
+	cb := NewFrequencyBreaker(time.Millisecond*100, 5)
+	cb.Fail()
+	if f := cb.Failures(); f != 1 {
+		t.Fatalf("expected failure count of 1, got %d", f)
+	}
+	time.Sleep(time.Millisecond * 100)
+	if f := cb.Failures(); f != 0 {
+		t.Fatalf("expected failures count to be 0, got %d", f)
+	}
+}
+
 func TestCircuitBreakerInterface(t *testing.T) {
 	var cb CircuitBreaker
 	cb = NewTrippableBreaker(0)
