@@ -249,12 +249,8 @@ func (cb *FrequencyBreaker) Failures() int64 {
 }
 
 func (cb *FrequencyBreaker) frequencyFail() {
-	now := time.Now()
-	if cb._failureTick == nil {
-		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
-		return
-	}
 	if time.Since(cb.failureTick()) > cb.Duration {
+		now := time.Now()
 		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
 		atomic.SwapInt64(&cb.failures, 0)
 	}
@@ -288,6 +284,11 @@ func (cb *FrequencyBreaker) Call(circuit func() error) error {
 }
 
 func (cb *FrequencyBreaker) failureTick() time.Time {
+	if cb._failureTick == nil {
+		now := time.Now()
+		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
+		return now
+	}
 	ptr := atomic.LoadPointer(&cb._failureTick)
 	return *(*time.Time)(ptr)
 }
