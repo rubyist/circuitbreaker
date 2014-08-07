@@ -2,6 +2,7 @@ package circuitbreaker
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
@@ -84,50 +85,62 @@ func TestPanelStats(t *testing.T) {
 
 	time.Sleep(time.Millisecond)
 
-	tripCount := statter.Counts["circuit.breaker.tripped"]
-	if tripCount != 1 {
-		t.Fatalf("expected trip count to be 1, got %d", tripCount)
+	if c := statter.Count("circuit.breaker.tripped"); c != 1 {
+		t.Fatalf("expected trip count to be 1, got %d", c)
 	}
 
-	resetCount := statter.Counts["circuit.breaker.reset"]
-	if resetCount != 1 {
-		t.Fatalf("expected reset count to be 1, got %d", resetCount)
+	if c := statter.Count("circuit.breaker.reset"); c != 1 {
+		t.Fatalf("expected reset count to be 1, got %d", c)
 	}
 
-	tripTime := statter.Timings["circuit.breaker.trip-time"]
-	if tripTime == 0 {
-		t.Fatalf("expected trip time to have been counted, got %v", tripTime)
+	if c := statter.Time("circuit.breaker.trip-time"); c == 0 {
+		t.Fatalf("expected trip time to have been counted, got %v", c)
 	}
 
-	failCount := statter.Counts["circuit.breaker.fail"]
-	if failCount != 1 {
-		t.Fatalf("expected fail count to be 1, got %d", failCount)
+	if c := statter.Count("circuit.breaker.fail"); c != 1 {
+		t.Fatalf("expected fail count to be 1, got %d", c)
 	}
 
-	readyCount := statter.Counts["circuit.breaker.ready"]
-	if readyCount != 1 {
-		t.Fatalf("expected ready count to be 1, got %d", readyCount)
+	if c := statter.Count("circuit.breaker.ready"); c != 1 {
+		t.Fatalf("expected ready count to be 1, got %d", c)
 	}
 }
 
 type testStatter struct {
 	Counts  map[string]int
 	Timings map[string]time.Duration
+	l       sync.Mutex
 }
 
 func newTestStatter() *testStatter {
-	return &testStatter{make(map[string]int), make(map[string]time.Duration)}
+	return &testStatter{Counts: make(map[string]int), Timings: make(map[string]time.Duration)}
+}
+
+func (s *testStatter) Count(name string) int {
+	s.l.Lock()
+	defer s.l.Unlock()
+	return s.Counts[name]
+}
+
+func (s *testStatter) Time(name string) time.Duration {
+	s.l.Lock()
+	defer s.l.Unlock()
+	return s.Timings[name]
 }
 
 func (s *testStatter) Counter(sampleRate float32, bucket string, n ...int) {
 	for _, x := range n {
+		s.l.Lock()
 		s.Counts[bucket] += x
+		s.l.Unlock()
 	}
 }
 
 func (s *testStatter) Timing(sampleRate float32, bucket string, d ...time.Duration) {
 	for _, x := range d {
+		s.l.Lock()
 		s.Timings[bucket] += x
+		s.l.Unlock()
 	}
 }
 
