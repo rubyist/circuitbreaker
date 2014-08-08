@@ -169,6 +169,7 @@ func (cb *TrippableBreaker) Fail() {
 func (cb *TrippableBreaker) Ready() bool {
 	state := cb.state()
 	if state == halfopen {
+		atomic.StoreInt64(&cb.halfOpens, 0)
 		cb.sendEvent(BreakerReady)
 	}
 	return state == closed || state == halfopen
@@ -224,10 +225,6 @@ func NewFrequencyBreaker(duration time.Duration, threshold int64) *FrequencyBrea
 // Fail records a failure. If the failure count meets the threshold within the duration,
 // the circuit breaker will trip. If a BreakerTripped callback is available it will be run.
 func (cb *FrequencyBreaker) Fail() {
-	if cb.Tripped() {
-		return
-	}
-
 	if cb.Duration > 0 {
 		cb.frequencyFail()
 	}

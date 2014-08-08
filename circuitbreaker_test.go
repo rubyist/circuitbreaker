@@ -53,19 +53,23 @@ func TestCircuitBreakerEvents(t *testing.T) {
 func TestTrippableBreakerState(t *testing.T) {
 	cb := NewTrippableBreaker(time.Millisecond * 100)
 
-	if cb.state() != closed {
-		t.Fatal("expected resetting breaker to start closed")
+	if !cb.Ready() {
+		t.Fatal("expected breaker to be ready")
+	}
+
+	cb.Trip()
+	if cb.Ready() {
+		t.Fatal("expected breaker to not be ready")
+	}
+	time.Sleep(cb.ResetTimeout)
+	if !cb.Ready() {
+		t.Fatal("expected breaker to be ready after reset timeout")
 	}
 
 	cb.Fail()
-	cb.Trip()
-	if cb.state() != open {
-		t.Fatal("expected resetting breaker to be open")
-	}
-
 	time.Sleep(cb.ResetTimeout)
-	if cb.state() != halfopen {
-		t.Fatal("expected resetting breaker to indicate a reattempt")
+	if !cb.Ready() {
+		t.Fatal("expected breaker to be ready after reset timeout, post failure")
 	}
 }
 
@@ -225,6 +229,12 @@ func TestFrequencyBreakerFailures(t *testing.T) {
 	time.Sleep(time.Millisecond * 100)
 	if f := cb.Failures(); f != 0 {
 		t.Fatalf("expected failures count to be 0, got %d", f)
+	}
+
+	cb.Trip()
+	cb.Fail()
+	if f := cb.Failures(); f != 1 {
+		t.Fatal("expected failure count to increment when in tripped state")
 	}
 }
 
