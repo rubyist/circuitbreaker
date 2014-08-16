@@ -77,7 +77,7 @@ func ExampleHTTPClient() {
 	fmt.Printf("%s", resource)
 }
 
-func ExampleCircuitBreaker_events() {
+func ExampleBreaker_events() {
 	// This example demonstrates the BreakerTripped and BreakerReset callbacks. These are
 	// available on all breaker types.
 	breaker := NewThresholdBreaker(1)

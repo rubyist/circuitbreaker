@@ -32,7 +32,7 @@ Here is a quick example of what circuitbreaker provides
 
 ```go
 // Creates a circuit breaker that will trip if the function fails 10 times
-cb := NewThresholdBreaker(10)
+cb := circuit.NewThresholdBreaker(10)
 
 events := cb.Subscribe()
 go func() {
@@ -53,7 +53,7 @@ Circuitbreaker can also wrap a time out around the remote call.
 ```go
 // Creates a circuit breaker that will trip after 10 failures or time outs
 // using a time out of 5 seconds
-cb := NewTimeoutBreaker(Time.Second * 5, 10)
+cb := circuit.NewTimeoutBreaker(Time.Second * 5, 10)
 
 // Proceed as above
 
@@ -63,7 +63,7 @@ Circuitbreaker can also trip based on the number of failures in a given time per
 
 ```go
 // Creates a circuit breaker that will trip if 10 failures occur in 1 minute
-cb := NewFrequencyBreaker(time.Minute, 10)
+cb := circuit.NewFrequencyBreaker(time.Minute, 10)
 
 // Proceed as above
 ```
@@ -74,7 +74,7 @@ time out around any request.
 ```go
 // Passing in nil will create a regular http.Client.
 // You can also build your own http.Client and pass it in
-client := NewHTTPClient(time.Second * 5, 10, nil)
+client := circuit.NewHTTPClient(time.Second * 5, 10, nil)
 client.BreakerTripped = func() {
 	// Perhaps notify your monitoring system
 }

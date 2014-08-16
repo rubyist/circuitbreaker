@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestCircuitBreakerTripping(t *testing.T) {
+func TestBreakerTripping(t *testing.T) {
 	cb := &TrippableBreaker{}
 
 	if cb.Tripped() {
@@ -24,7 +24,7 @@ func TestCircuitBreakerTripping(t *testing.T) {
 	}
 }
 
-func TestCircuitBreakerEvents(t *testing.T) {
+func TestBreakerEvents(t *testing.T) {
 	cb := NewTrippableBreaker(time.Millisecond * 100)
 	events := cb.Subscribe()
 
@@ -238,8 +238,8 @@ func TestFrequencyBreakerFailures(t *testing.T) {
 	}
 }
 
-func TestCircuitBreakerInterface(t *testing.T) {
-	var cb CircuitBreaker
+func TestBreakerInterface(t *testing.T) {
+	var cb Breaker
 	cb = NewTrippableBreaker(0)
 	if _, ok := cb.(*TrippableBreaker); !ok {
 		t.Errorf("%v is not a ResettingBreaker", cb)
@@ -255,8 +255,13 @@ func TestCircuitBreakerInterface(t *testing.T) {
 		t.Errorf("%v is not a TimeoutBreaker", cb)
 	}
 
+	cb = NewFrequencyBreaker(0, 0)
+	if _, ok := cb.(*FrequencyBreaker); !ok {
+		t.Errorf("%v is not a FrequencyBreaker", cb)
+	}
+
 	cb = NoOp()
-	if _, ok := cb.(*noOpCircuitBreaker); !ok {
+	if _, ok := cb.(*noOpBreaker); !ok {
 		t.Errorf("%v is not a no-op breaker", cb)
 	}
 }
