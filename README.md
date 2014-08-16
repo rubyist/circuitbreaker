@@ -9,7 +9,7 @@ application makes a lot of these requests, many resources can be tied
 up waiting for these time outs to occur. A circuit breaker wraps these
 remote calls and will trip after a defined amount of failures or time outs
 occur. When a circuit breaker is tripped any future calls will avoid making
-the remote call and return an error to the client. In the meantime, the
+the remote call and return an error to the caller. In the meantime, the
 circuit breaker will periodically allow some calls to be tried again and
 will close the circuit if those are successful.
 
