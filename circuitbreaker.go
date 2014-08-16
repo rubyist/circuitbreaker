@@ -1,4 +1,4 @@
-// Package circuitbreaker implements the Circuit Breaker pattern. It will wrap
+// Package circuit implements the Circuit Breaker pattern. It will wrap
 // a function call (typically one which uses remote services) and monitors for
 // failures and/or time outs. When a threshold of failures or time outs has been
 // reached, future calls to the function will not run. During this state, the
@@ -24,7 +24,7 @@
 // The package also provides a wrapper around an http.Client that wraps all of
 // the http.Client functions with a CircuitBreaker.
 //
-package circuitbreaker
+package circuit
 
 import (
 	"errors"

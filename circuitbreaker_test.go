@@ -1,4 +1,4 @@
-package circuitbreaker
+package circuit
 
 import (
 	"fmt"
