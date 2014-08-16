@@ -14,6 +14,11 @@ type Statter interface {
 	Gauge(sampleRate float32, bucket string, value ...string)
 }
 
+type PanelEvent struct {
+	Name  string
+	Event BreakerEvent
+}
+
 // Panel tracks a group of circuit breakers by name.
 type Panel struct {
 	Statter      Statter
@@ -21,9 +26,10 @@ type Panel struct {
 
 	circuits map[string]CircuitBreaker
 
-	lastTripTimes map[string]time.Time
-	tripTimesLock sync.RWMutex
-	panelLock     sync.RWMutex
+	lastTripTimes  map[string]time.Time
+	tripTimesLock  sync.RWMutex
+	panelLock      sync.RWMutex
+	eventReceivers []chan PanelEvent
 }
 
 func NewPanel() *Panel {
@@ -44,8 +50,11 @@ func (p *Panel) Add(name string, cb CircuitBreaker) {
 
 	go func() {
 		for {
-			e := <-events
-			switch e {
+			event := <-events
+			for _, receiver := range p.eventReceivers {
+				receiver <- PanelEvent{name, event}
+			}
+			switch event {
 			case BreakerTripped:
 				p.breakerTripped(name)
 			case BreakerReset:
@@ -71,6 +80,26 @@ func (p *Panel) Get(name string) (CircuitBreaker, bool) {
 	}
 
 	return NoOp(), ok
+}
+
+// Subscribe returns a channel of PanelEvents. Whenever a breaker changes state,
+// the PanelEvent will be sent over the channel. See BreakerEvent for the types of events.
+func (p *Panel) Subscribe() <-chan PanelEvent {
+	eventReader := make(chan PanelEvent)
+	output := make(chan PanelEvent, 100)
+
+	go func() {
+		for v := range eventReader {
+			select {
+			case output <- v:
+			default:
+				<-output
+				output <- v
+			}
+		}
+	}()
+	p.eventReceivers = append(p.eventReceivers, eventReader)
+	return output
 }
 
 func (p *Panel) breakerTripped(name string) {
