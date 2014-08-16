@@ -16,18 +16,19 @@ type Statter interface {
 
 // Panel tracks a group of circuit breakers by name.
 type Panel struct {
-	Circuits map[string]CircuitBreaker
-
 	Statter      Statter
 	StatsPrefixf string
 
+	circuits map[string]CircuitBreaker
+
 	lastTripTimes map[string]time.Time
 	tripTimesLock sync.RWMutex
+	panelLock     sync.RWMutex
 }
 
 func NewPanel() *Panel {
 	return &Panel{
-		Circuits:      make(map[string]CircuitBreaker),
+		circuits:      make(map[string]CircuitBreaker),
 		Statter:       &noopStatter{},
 		StatsPrefixf:  defaultStatsPrefixf,
 		lastTripTimes: make(map[string]time.Time)}
@@ -35,7 +36,9 @@ func NewPanel() *Panel {
 
 // Add sets the name as a reference to the given circuit breaker.
 func (p *Panel) Add(name string, cb CircuitBreaker) {
-	p.Circuits[name] = cb
+	p.panelLock.Lock()
+	p.circuits[name] = cb
+	p.panelLock.Unlock()
 
 	events := cb.Subscribe()
 
@@ -54,6 +57,20 @@ func (p *Panel) Add(name string, cb CircuitBreaker) {
 			}
 		}
 	}()
+}
+
+// Get retrieves a circuit breaker by name.  If no circuit breaker exists, it
+// returns the NoOp one and sets ok to false.
+func (p *Panel) Get(name string) (CircuitBreaker, bool) {
+	p.panelLock.RLock()
+	cb, ok := p.circuits[name]
+	p.panelLock.RUnlock()
+
+	if ok {
+		return cb, ok
+	}
+
+	return NoOp(), ok
 }
 
 func (p *Panel) breakerTripped(name string) {
@@ -86,28 +103,6 @@ func (p *Panel) breakerFail(name string) {
 
 func (p *Panel) breakerReady(name string) {
 	p.Statter.Counter(1.0, fmt.Sprintf(p.StatsPrefixf, name)+".ready", 1)
-}
-
-// Get retrieves a circuit breaker by name.  If no circuit breaker exists, it
-// returns the NoOp one. Access the Panel like a hash if you don't want a
-// NoOp.
-func (p *Panel) Get(name string) CircuitBreaker {
-	if cb, ok := p.Circuits[name]; ok {
-		return cb
-	}
-
-	return NoOp()
-}
-
-// GetAll creates a new panel from the given names in this panel.
-func (p *Panel) GetAll(names ...string) *Panel {
-	newPanel := NewPanel()
-
-	for _, name := range names {
-		newPanel.Add(name, p.Get(name))
-	}
-
-	return newPanel
 }
 
 type noopStatter struct {

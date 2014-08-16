@@ -2,7 +2,9 @@ package circuitbreaker
 
 import (
 	"fmt"
+
 	"github.com/peterbourgon/g2s"
+
 	"io/ioutil"
 	"log"
 	"time"
@@ -111,13 +113,13 @@ func ExamplePanel() {
 	panel.Add("breaker2", breaker2)
 
 	// Elsewhere in the code ...
-	b1 := panel.Get("breaker1")
+	b1, _ := panel.Get("breaker1")
 	b1.Call(func() error {
 		// Do some work
 		return nil
 	})
 
-	b2 := panel.Get("breaker2")
+	b2, _ := panel.Get("breaker2")
 	b2.Call(func() error {
 		// Do some work
 		return nil
