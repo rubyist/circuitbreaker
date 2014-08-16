@@ -1,11 +1,11 @@
-// Package circuitbreaker implements the Circuit Breaker pattern. It will wrap
+// Package circuit implements the Circuit Breaker pattern. It will wrap
 // a function call (typically one which uses remote services) and monitors for
 // failures and/or time outs. When a threshold of failures or time outs has been
 // reached, future calls to the function will not run. During this state, the
 // breaker will periodically allow the function to run and, if it is successful,
 // will start running the function again.
 //
-// Circuitbreaker includes three types of circuit breakers:
+// Circuit includes three types of circuit breakers:
 //
 // A ThresholdBreaker will trip when the failure count reaches a given threshold.
 // It does not matter how long it takes to reach the threshold.
@@ -22,9 +22,9 @@
 // are all that is typically needed.
 //
 // The package also provides a wrapper around an http.Client that wraps all of
-// the http.Client functions with a CircuitBreaker.
+// the http.Client functions with a Breaker.
 //
-package circuitbreaker
+package circuit
 
 import (
 	"errors"
@@ -56,9 +56,9 @@ var (
 	ErrBreakerTimeout = errors.New("breaker time out")
 )
 
-var noop = &noOpCircuitBreaker{}
+var noop = &noOpBreaker{}
 
-type CircuitBreaker interface {
+type Breaker interface {
 	Call(func() error) error
 	Fail()
 	Failures() int64
@@ -73,7 +73,7 @@ type CircuitBreaker interface {
 // TrippableBreaker is a base for building trippable circuit breakers. It keeps
 // track of the tripped state and runs the OnTrip and OnReset callbacks.
 type TrippableBreaker struct {
-	// ResetTimeout is the minimum amount of time the CircuitBreaker will wait
+	// ResetTimeout is the minimum amount of time the Breaker will wait
 	// before allowing the function to be called again
 	ResetTimeout time.Duration
 
@@ -208,7 +208,7 @@ type FrequencyBreaker struct {
 	// Duration is the amount of time in which the failure theshold must be met.
 	Duration time.Duration
 
-	// Threshold is the number of failures CircuitBreaker will allow before tripping
+	// Threshold is the number of failures Breaker will allow before tripping
 	Threshold int64
 
 	_failureTick unsafe.Pointer
@@ -290,7 +290,7 @@ func (cb *FrequencyBreaker) failureTick() time.Time {
 	return *(*time.Time)(ptr)
 }
 
-// ThresholdBreaker is a ResettingCircuitBreaker that will trip when its failure count
+// ThresholdBreaker is a circuit breaker that will trip when its failure count
 // passes a given threshold. Clients of ThresholdBreaker can either manually call the
 // Fail function to record a failure, checking the tripped state themselves, or they
 // can use the Call function to wrap the ThresholdBreaker around a function call.
@@ -307,7 +307,7 @@ func NewThresholdBreaker(threshold int64) *ThresholdBreaker {
 // it is protecting takes too long to run. Clients of Timeout must use the Call function.
 // The Fail function is a noop.
 type TimeoutBreaker struct {
-	// Timeout is the length of time the CircuitBreaker will wait for Call() to finish
+	// Timeout is the length of time the Breaker will wait for Call() to finish
 	Timeout time.Duration
 	*ThresholdBreaker
 }
@@ -350,23 +350,23 @@ func (cb *TimeoutBreaker) Call(circuit func() error) error {
 	}
 }
 
-// NoOp returns a CircuitBreaker null object.  It implements the interface with
+// NoOp returns a Breaker null object.  It implements the interface with
 // no-ops for every function.
-func NoOp() CircuitBreaker {
+func NoOp() Breaker {
 	return noop
 }
 
-type noOpCircuitBreaker struct{}
+type noOpBreaker struct{}
 
-func (c *noOpCircuitBreaker) Call(f func() error) error {
+func (c *noOpBreaker) Call(f func() error) error {
 	return f()
 }
 
-func (c *noOpCircuitBreaker) Fail()                           {}
-func (c *noOpCircuitBreaker) Trip()                           {}
-func (c *noOpCircuitBreaker) Reset()                          {}
-func (c *noOpCircuitBreaker) Break()                          {}
-func (c *noOpCircuitBreaker) Failures() int64                 { return 0 }
-func (c *noOpCircuitBreaker) Ready() bool                     { return true }
-func (c *noOpCircuitBreaker) Tripped() bool                   { return false }
-func (cb *noOpCircuitBreaker) Subscribe() <-chan BreakerEvent { return nil }
+func (c *noOpBreaker) Fail()                           {}
+func (c *noOpBreaker) Trip()                           {}
+func (c *noOpBreaker) Reset()                          {}
+func (c *noOpBreaker) Break()                          {}
+func (c *noOpBreaker) Failures() int64                 { return 0 }
+func (c *noOpBreaker) Ready() bool                     { return true }
+func (c *noOpBreaker) Tripped() bool                   { return false }
+func (cb *noOpBreaker) Subscribe() <-chan BreakerEvent { return nil }
