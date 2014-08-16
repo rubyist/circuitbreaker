@@ -17,7 +17,7 @@ type HTTPClient struct {
 	BreakerTripped func()
 	BreakerReset   func()
 	BreakerLookup  func(*HTTPClient, interface{}) CircuitBreaker
-	panel          *Panel
+	Panel          *Panel
 }
 
 var defaultBreakerName = "_default"
@@ -41,15 +41,15 @@ func NewHostBasedHTTPClient(timeout time.Duration, threshold int64, client *http
 		rawURL := val.(string)
 		parsedURL, err := url.Parse(rawURL)
 		if err != nil {
-			breaker, _ := c.panel.Get(defaultBreakerName)
+			breaker, _ := c.Panel.Get(defaultBreakerName)
 			return breaker
 		}
 		host := parsedURL.Host
 
-		cb, ok := c.panel.Get(host)
+		cb, ok := c.Panel.Get(host)
 		if !ok {
 			cb = NewTimeoutBreaker(timeout, threshold)
-			c.panel.Add(host, cb)
+			c.Panel.Add(host, cb)
 		}
 
 		return cb
@@ -68,9 +68,9 @@ func NewHTTPClientWithBreaker(breaker CircuitBreaker, client *http.Client) *HTTP
 	panel := NewPanel()
 	panel.Add(defaultBreakerName, breaker)
 
-	brclient := &HTTPClient{Client: client, panel: NewPanel()}
+	brclient := &HTTPClient{Client: client, Panel: NewPanel()}
 	brclient.BreakerLookup = func(c *HTTPClient, val interface{}) CircuitBreaker {
-		cb, _ := c.panel.Get(defaultBreakerName)
+		cb, _ := c.Panel.Get(defaultBreakerName)
 		return cb
 	}
 
@@ -152,7 +152,7 @@ func (c *HTTPClient) breakerLookup(val interface{}) CircuitBreaker {
 	if c.BreakerLookup != nil {
 		return c.BreakerLookup(c, val)
 	}
-	cb, _ := c.panel.Get(defaultBreakerName)
+	cb, _ := c.Panel.Get(defaultBreakerName)
 	return cb
 }
 
