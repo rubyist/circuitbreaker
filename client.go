@@ -26,32 +26,8 @@ var defaultBreakerName = "_default"
 // It wraps all of the regular http.Client functions. Specifying 0 for timeout will
 // give a breaker that does not check for time outs.
 func NewHTTPClient(timeout time.Duration, threshold int64, client *http.Client) *HTTPClient {
-	if client == nil {
-		client = &http.Client{}
-	}
-
 	breaker := NewTimeoutBreaker(timeout, threshold)
-	panel := NewPanel()
-	panel.Add(defaultBreakerName, breaker)
-
-	brclient := &HTTPClient{Client: client, panel: NewPanel()}
-	brclient.BreakerLookup = func(c *HTTPClient, val interface{}) CircuitBreaker {
-		cb, _ := c.panel.Get(defaultBreakerName)
-		return cb
-	}
-
-	events := breaker.Subscribe()
-	go func() {
-		event := <-events
-		switch event {
-		case BreakerTripped:
-			brclient.runBreakerTripped()
-		case BreakerReset:
-			brclient.runBreakerReset()
-		}
-	}()
-
-	return brclient
+	return NewHTTPClientWithBreaker(breaker, client)
 }
 
 // NewHostBasedHTTPClient provides a circuit breaker wrapper around http.Client. This
@@ -78,6 +54,36 @@ func NewHostBasedHTTPClient(timeout time.Duration, threshold int64, client *http
 
 		return cb
 	}
+
+	return brclient
+}
+
+// NewHTTPClientWithBreaker provides a circuit breaker wrapper around http.Client.
+// It wraps all of the regular http.Client functions using the provided CircuitBreaker.
+func NewHTTPClientWithBreaker(breaker CircuitBreaker, client *http.Client) *HTTPClient {
+	if client == nil {
+		client = &http.Client{}
+	}
+
+	panel := NewPanel()
+	panel.Add(defaultBreakerName, breaker)
+
+	brclient := &HTTPClient{Client: client, panel: NewPanel()}
+	brclient.BreakerLookup = func(c *HTTPClient, val interface{}) CircuitBreaker {
+		cb, _ := c.panel.Get(defaultBreakerName)
+		return cb
+	}
+
+	events := breaker.Subscribe()
+	go func() {
+		event := <-events
+		switch event {
+		case BreakerTripped:
+			brclient.runBreakerTripped()
+		case BreakerReset:
+			brclient.runBreakerReset()
+		}
+	}()
 
 	return brclient
 }
