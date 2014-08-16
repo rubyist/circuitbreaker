@@ -75,12 +75,6 @@ time out around any request.
 // Passing in nil will create a regular http.Client.
 // You can also build your own http.Client and pass it in
 client := circuit.NewHTTPClient(time.Second * 5, 10, nil)
-client.BreakerTripped = func() {
-	// Perhaps notify your monitoring system
-}
-client.BreakerReset = func() {
-	// Perhaps notify your monitoring system
-}
 
 resp, err := client.Get("http://example.com/resource.json")
 ```
