@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 1.1.1 - 2014-08-20
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Fixed
+- Only send the reset event if the breaker was in a tripped state
+
 ## 1.1.0 - 2014-08-16
 
 ### Added

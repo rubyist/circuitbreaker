@@ -117,7 +117,7 @@ func (cb *TrippableBreaker) Subscribe() <-chan BreakerEvent {
 }
 
 // Trip will trip the circuit breaker. After Trip() is called, Tripped() will
-// return true. If an OnTrip callback is available it will be run.
+// return true.
 func (cb *TrippableBreaker) Trip() {
 	atomic.StoreInt32(&cb.tripped, 1)
 	now := time.Now()
@@ -126,12 +126,14 @@ func (cb *TrippableBreaker) Trip() {
 }
 
 // Reset will reset the circuit breaker. After Reset() is called, Tripped() will
-// return false. If an OnReset callback is available it will be run.
+// return false.
 func (cb *TrippableBreaker) Reset() {
+	if cb.Tripped() {
+		cb.sendEvent(BreakerReset)
+	}
 	atomic.StoreInt32(&cb.broken, 0)
 	atomic.StoreInt32(&cb.tripped, 0)
 	atomic.SwapInt64(&cb.failures, 0)
-	cb.sendEvent(BreakerReset)
 }
 
 // Tripped returns true if the circuit breaker is tripped, false if it is reset.
