@@ -109,8 +109,8 @@ func TestThresholdBreaker(t *testing.T) {
 	}
 
 	cb.Reset()
-	if cb.failures != 0 {
-		t.Fatalf("expected reset to set failures to 0, got %d", cb.failures)
+	if failures := cb.Failures(); failures != 0 {
+		t.Fatalf("expected reset to set failures to 0, got %d", failures)
 	}
 	if cb.Tripped() {
 		t.Fatal("expected threshold breaker to be open")
@@ -227,6 +227,12 @@ func TestFrequencyBreakerFailures(t *testing.T) {
 	if f := cb.Failures(); f != 1 {
 		t.Fatalf("expected failure count of 1, got %d", f)
 	}
+
+	cb.Reset()
+	if f := cb.Failures(); f != 1 {
+		t.Fatalf("expected failure count of 1, got %d", f)
+	}
+
 	time.Sleep(time.Millisecond)
 	if f := cb.Failures(); f != 0 {
 		t.Fatalf("expected failures count to be 0, got %d", f)

@@ -213,7 +213,8 @@ type FrequencyBreaker struct {
 	// Threshold is the number of failures Breaker will allow before tripping
 	Threshold int64
 
-	_failureTick unsafe.Pointer
+	_failureTick      unsafe.Pointer
+	failuresSinceTick int64
 	*TrippableBreaker
 }
 
@@ -221,7 +222,7 @@ type FrequencyBreaker struct {
 // and failure threshold. If a duration is specified as 0 then no duration will be used and
 // the behavior will be the same as a ThresholdBreaker
 func NewFrequencyBreaker(duration time.Duration, threshold int64) *FrequencyBreaker {
-	return &FrequencyBreaker{duration, threshold, nil, NewTrippableBreaker(time.Millisecond * 500)}
+	return &FrequencyBreaker{duration, threshold, nil, 0, NewTrippableBreaker(time.Millisecond * 500)}
 }
 
 // Fail records a failure. If the failure count meets the threshold within the duration,
@@ -232,6 +233,7 @@ func (cb *FrequencyBreaker) Fail() {
 	}
 
 	cb.TrippableBreaker.Fail()
+	atomic.AddInt64(&cb.failuresSinceTick, 1)
 	failures := atomic.AddInt64(&cb.failures, 1)
 	if failures == cb.Threshold {
 		cb.Trip()
@@ -241,10 +243,15 @@ func (cb *FrequencyBreaker) Fail() {
 // Failures returns the number of failures for this circuit breaker. The failure count
 // for a FrequencyBreaker resets when the duration expires.
 func (cb *FrequencyBreaker) Failures() int64 {
-	if cb.Duration > 0 && (time.Since(cb.failureTick()) > cb.Duration) {
+	if cb.Duration <= 0 {
+		return cb.TrippableBreaker.Failures()
+	}
+
+	if time.Since(cb.failureTick()) > cb.Duration {
+		atomic.StoreInt64(&cb.failuresSinceTick, 0)
 		return 0
 	}
-	return cb.TrippableBreaker.Failures()
+	return atomic.LoadInt64(&cb.failuresSinceTick)
 }
 
 func (cb *FrequencyBreaker) frequencyFail() {

@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+### 1.1.2 - 2014-08-20
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Fixed
+- For a FrequencyBreaker, Failures() should return the count since the duration start, even after resetting.
+
 ## 1.1.1 - 2014-08-20
 
 ### Added
