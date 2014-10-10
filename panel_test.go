@@ -8,8 +8,7 @@ import (
 )
 
 func TestPanelGet(t *testing.T) {
-	noop := NoOp()
-	rb := NewTrippableBreaker(0)
+	rb := NewBreaker()
 	p := NewPanel()
 	p.Add("a", rb)
 
@@ -23,18 +22,11 @@ func TestPanelGet(t *testing.T) {
 	}
 
 	a, ok = p.Get("missing")
-	if a != noop {
-		t.Errorf("Expected 'missing' to have a %s, got %s",
-			reflect.TypeOf(noop), reflect.TypeOf(a))
-	}
-	if ok {
-		t.Error("Expected ok to be false")
-	}
 }
 
 func TestPanelAdd(t *testing.T) {
 	p := NewPanel()
-	rb := NewTrippableBreaker(0)
+	rb := NewBreaker()
 
 	p.Add("a", rb)
 
@@ -48,16 +40,16 @@ func TestPanelStats(t *testing.T) {
 	statter := newTestStatter()
 	p := NewPanel()
 	p.Statter = statter
-	rb := NewTrippableBreaker(time.Millisecond * 10)
+	rb := NewBreaker()
 	p.Add("breaker", rb)
 
 	rb.Fail()
 	rb.Trip()
-	time.Sleep(time.Millisecond * 11)
+	time.Sleep(rb.nextBackOff)
 	rb.Ready()
 	rb.Reset()
 
-	time.Sleep(time.Millisecond)
+	time.Sleep(rb.nextBackOff)
 
 	if c := statter.Count("circuit.breaker.tripped"); c != 1 {
 		t.Fatalf("expected trip count to be 1, got %d", c)

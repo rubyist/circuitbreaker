@@ -45,27 +45,61 @@ go func() {
 cb.Call(func() error {
 	// This is where you'll do some remote call
 	// If it fails, return an error
-})
+}, 0)
 ```
 
 Circuitbreaker can also wrap a time out around the remote call.
 
 ```go
-// Creates a circuit breaker that will trip after 10 failures or time outs
+// Creates a circuit breaker that will trip after 10 failures
 // using a time out of 5 seconds
-cb := circuit.NewTimeoutBreaker(Time.Second * 5, 10)
+cb := circuit.NewThresholdBreaker(10)
+
+cb.Call(func() error {
+  // This is where you'll do some remote call
+  // If it fails, return an error
+}, time.Second * 5) // This will time out after 5 seconds, which counts as a failure
 
 // Proceed as above
 
 ```
 
-Circuitbreaker can also trip based on the number of failures in a given time period.
+Circuitbreaker can also trip based on the number of consecutive failures.
 
 ```go
-// Creates a circuit breaker that will trip if 10 failures occur in 1 minute
-cb := circuit.NewFrequencyBreaker(time.Minute, 10)
+// Creates a circuit breaker that will trip if 10 consecutive failures occur
+cb := circuit.NewConsecutiveBreaker(10)
 
 // Proceed as above
+```
+
+Circuitbreaker can trip based on the error rate.
+
+```go
+// Creates a circuit breaker based on the error rate
+cb := circuit.NewRateBreaker(0.95, 100) // trip when error rate hits 95%, with at least 100 samples
+
+// Proceed as above
+```
+
+If it doesn't make sense to wrap logic in Call(), breakers can be handled manually.
+
+```go
+cb := circuit.NewThresholdBreaker(10)
+
+for {
+  if cb.Ready() {
+    // Breaker is not tripped, proceed
+    err := doSomething()
+    if err != nil {
+      cb.Fail() // This will trip the breaker once it's failed 10 times
+      continue
+    }
+    cb.Success()
+  } else {
+    // Breaker is in a tripped state.
+  }
+}
 ```
 
 Circuitbreaker also provides a wrapper around `http.Client` that will wrap a

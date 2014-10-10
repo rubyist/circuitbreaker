@@ -16,8 +16,9 @@ type HTTPClient struct {
 	Client         *http.Client
 	BreakerTripped func()
 	BreakerReset   func()
-	BreakerLookup  func(*HTTPClient, interface{}) Breaker
+	BreakerLookup  func(*HTTPClient, interface{}) *Breaker
 	Panel          *Panel
+	timeout        time.Duration
 }
 
 var defaultBreakerName = "_default"
@@ -26,8 +27,8 @@ var defaultBreakerName = "_default"
 // It wraps all of the regular http.Client functions. Specifying 0 for timeout will
 // give a breaker that does not check for time outs.
 func NewHTTPClient(timeout time.Duration, threshold int64, client *http.Client) *HTTPClient {
-	breaker := NewTimeoutBreaker(timeout, threshold)
-	return NewHTTPClientWithBreaker(breaker, client)
+	breaker := NewThresholdBreaker(threshold)
+	return NewHTTPClientWithBreaker(breaker, timeout, client)
 }
 
 // NewHostBasedHTTPClient provides a circuit breaker wrapper around http.Client. This
@@ -37,7 +38,7 @@ func NewHTTPClient(timeout time.Duration, threshold int64, client *http.Client) 
 func NewHostBasedHTTPClient(timeout time.Duration, threshold int64, client *http.Client) *HTTPClient {
 	brclient := NewHTTPClient(timeout, threshold, client)
 
-	brclient.BreakerLookup = func(c *HTTPClient, val interface{}) Breaker {
+	brclient.BreakerLookup = func(c *HTTPClient, val interface{}) *Breaker {
 		rawURL := val.(string)
 		parsedURL, err := url.Parse(rawURL)
 		if err != nil {
@@ -48,7 +49,7 @@ func NewHostBasedHTTPClient(timeout time.Duration, threshold int64, client *http
 
 		cb, ok := c.Panel.Get(host)
 		if !ok {
-			cb = NewTimeoutBreaker(timeout, threshold)
+			cb = NewThresholdBreaker(threshold)
 			c.Panel.Add(host, cb)
 		}
 
@@ -60,7 +61,7 @@ func NewHostBasedHTTPClient(timeout time.Duration, threshold int64, client *http
 
 // NewHTTPClientWithBreaker provides a circuit breaker wrapper around http.Client.
 // It wraps all of the regular http.Client functions using the provided Breaker.
-func NewHTTPClientWithBreaker(breaker Breaker, client *http.Client) *HTTPClient {
+func NewHTTPClientWithBreaker(breaker *Breaker, timeout time.Duration, client *http.Client) *HTTPClient {
 	if client == nil {
 		client = &http.Client{}
 	}
@@ -68,8 +69,8 @@ func NewHTTPClientWithBreaker(breaker Breaker, client *http.Client) *HTTPClient 
 	panel := NewPanel()
 	panel.Add(defaultBreakerName, breaker)
 
-	brclient := &HTTPClient{Client: client, Panel: NewPanel()}
-	brclient.BreakerLookup = func(c *HTTPClient, val interface{}) Breaker {
+	brclient := &HTTPClient{Client: client, Panel: NewPanel(), timeout: timeout}
+	brclient.BreakerLookup = func(c *HTTPClient, val interface{}) *Breaker {
 		cb, _ := c.Panel.Get(defaultBreakerName)
 		return cb
 	}
@@ -96,7 +97,7 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	breaker.Call(func() error {
 		resp, err = c.Client.Do(req)
 		return err
-	})
+	}, c.timeout)
 	return resp, err
 }
 
@@ -108,7 +109,7 @@ func (c *HTTPClient) Get(url string) (*http.Response, error) {
 		aresp, err := c.Client.Get(url)
 		resp = aresp
 		return err
-	})
+	}, c.timeout)
 	return resp, err
 }
 
@@ -120,7 +121,7 @@ func (c *HTTPClient) Head(url string) (*http.Response, error) {
 		aresp, err := c.Client.Head(url)
 		resp = aresp
 		return err
-	})
+	}, c.timeout)
 	return resp, err
 }
 
@@ -132,7 +133,7 @@ func (c *HTTPClient) Post(url string, bodyType string, body io.Reader) (*http.Re
 		aresp, err := c.Client.Post(url, bodyType, body)
 		resp = aresp
 		return err
-	})
+	}, c.timeout)
 	return resp, err
 }
 
@@ -144,11 +145,11 @@ func (c *HTTPClient) PostForm(url string, data url.Values) (*http.Response, erro
 		aresp, err := c.Client.PostForm(url, data)
 		resp = aresp
 		return err
-	})
+	}, c.timeout)
 	return resp, err
 }
 
-func (c *HTTPClient) breakerLookup(val interface{}) Breaker {
+func (c *HTTPClient) breakerLookup(val interface{}) *Breaker {
 	if c.BreakerLookup != nil {
 		return c.BreakerLookup(c, val)
 	}

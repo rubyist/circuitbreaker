@@ -1,7 +1,31 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-### 1.1.2 - 2014-08-20
+## 2.0.0 - 2014-10-13
+
+### Added
+- All circuit breakers are now a Breaker with trip semantics handled by a TripFunc
+- NewConsecutiveBreaker
+- NewRateBreaker
+- ConsecFailures
+- ErrorRate
+- Success
+- Successes
+- Retry logic now uses cenkalti/backoff, exponential backoff by default
+
+### Deprecated
+- Nothing
+
+### Removed
+- TrippableBreaker, ThresholdBreaker, FrequencyBreaker, TimeoutBreaker; all handled by Breaker now
+- NewFrequencyBreaker, replaced by NewConsecutiveBreaker
+- NewTimeoutBreaker, time out semantics are now handled by Call()
+- NoOp(), use a Breaker with no TripFunc instead
+
+### Fixed
+- Nothing
+
+## 1.1.2 - 2014-08-20
 
 ### Added
 - Nothing
