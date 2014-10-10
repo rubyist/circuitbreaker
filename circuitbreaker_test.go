@@ -245,6 +245,31 @@ func TestFrequencyBreakerFailures(t *testing.T) {
 	}
 }
 
+func TestRateBreakerTripping(t *testing.T) {
+	cb := NewRateBreaker(0.5, time.Minute, 4)
+	cb.Reset()
+	cb.Reset()
+	cb.Fail()
+	cb.Fail()
+
+	if !cb.Tripped() {
+		t.Fatal("expected rate breaker to be tripped")
+	}
+
+	if er := cb.ErrorRate(); er != 0.5 {
+		t.Fatalf("expected error rate to be 0.5, got %f", er)
+	}
+}
+
+func TestRateBreakerSampleSize(t *testing.T) {
+	cb := NewRateBreaker(0.5, time.Minute, 100)
+	cb.Fail()
+
+	if cb.Tripped() {
+		t.Fatal("expected rate breaker to not be tripped yet")
+	}
+}
+
 func TestBreakerInterface(t *testing.T) {
 	var cb Breaker
 	cb = NewTrippableBreaker(0)

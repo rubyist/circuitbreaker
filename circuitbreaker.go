@@ -62,6 +62,7 @@ type Breaker interface {
 	Call(func() error) error
 	Fail()
 	Failures() int64
+	Resets() int64
 	Trip()
 	Reset()
 	Break()
@@ -82,6 +83,7 @@ type TrippableBreaker struct {
 	tripped        int32
 	broken         int32
 	failures       int64
+	resets         int64
 	eventReceivers []chan BreakerEvent
 }
 
@@ -134,6 +136,7 @@ func (cb *TrippableBreaker) Reset() {
 	atomic.StoreInt32(&cb.broken, 0)
 	atomic.StoreInt32(&cb.tripped, 0)
 	atomic.SwapInt64(&cb.failures, 0)
+	atomic.AddInt64(&cb.resets, 1)
 }
 
 // Tripped returns true if the circuit breaker is tripped, false if it is reset.
@@ -156,6 +159,10 @@ func (cb *TrippableBreaker) Call(circuit func() error) error {
 // Failures returns the number of failures for this circuit breaker.
 func (cb *TrippableBreaker) Failures() int64 {
 	return atomic.LoadInt64(&cb.failures)
+}
+
+func (cb *TrippableBreaker) Resets() int64 {
+	return atomic.LoadInt64(&cb.resets)
 }
 
 // Fail records the time of a failure
@@ -359,6 +366,89 @@ func (cb *TimeoutBreaker) Call(circuit func() error) error {
 	}
 }
 
+// RateBreaker is a circuit breaker that will trip when its error rate reaches
+// a certain threshold. The error rate is calculated as failures / (successes + failures)
+// where successes is the number of times Reset() was called.
+type RateBreaker struct {
+	errorRate         float64
+	sampleRate        time.Duration
+	minSamples        int
+	_failureTick      unsafe.Pointer
+	failuresSinceTick int64
+	_resetTick        unsafe.Pointer
+	resetsSinceTick   int64
+	*TrippableBreaker
+}
+
+// NewRateBreaker creates a RateBreaker. The error rate is specified as floating
+// point, e.g. 90% would be 0.9. The sampleRate is how frequently the breaker will
+// zero its counters. The minSamples specifies how many events need to happen since
+// the last counter reset before the breaker can trip.
+func NewRateBreaker(errorRate float64, sampleRate time.Duration, minSamples int) *RateBreaker {
+	return &RateBreaker{errorRate, sampleRate, minSamples, nil, 0, nil, 0, NewTrippableBreaker(time.Millisecond * 500)}
+}
+
+// ErrorRate returns the error rate since the last counter reset.
+func (cb *RateBreaker) ErrorRate() float64 {
+	failures := float64(atomic.LoadInt64(&cb.failures))
+	resets := float64(cb.Resets())
+	total := failures + resets
+	return failures / total
+}
+
+func (cb *RateBreaker) Fail() {
+	cb.frequencyFail()
+	cb.TrippableBreaker.Fail()
+	failures := float64(atomic.AddInt64(&cb.failures, 1))
+	resets := float64(cb.Resets())
+	total := failures + resets
+
+	if (int(total) >= cb.minSamples) && (failures/total >= cb.errorRate) {
+		cb.Trip()
+	}
+}
+
+func (cb *RateBreaker) Reset() {
+	cb.frequencyReset()
+	cb.TrippableBreaker.Reset()
+}
+
+func (cb *RateBreaker) frequencyFail() {
+	if time.Since(cb.failureTick()) > cb.sampleRate {
+		now := time.Now()
+		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
+		atomic.SwapInt64(&cb.failures, 0)
+	}
+}
+
+func (cb *RateBreaker) failureTick() time.Time {
+	if cb._failureTick == nil {
+		now := time.Now()
+		atomic.StorePointer(&cb._failureTick, unsafe.Pointer(&now))
+		return now
+	}
+	ptr := atomic.LoadPointer(&cb._failureTick)
+	return *(*time.Time)(ptr)
+}
+
+func (cb *RateBreaker) frequencyReset() {
+	if time.Since(cb.resetTick()) > cb.sampleRate {
+		now := time.Now()
+		atomic.StorePointer(&cb._resetTick, unsafe.Pointer(&now))
+		atomic.SwapInt64(&cb.resets, 0)
+	}
+}
+
+func (cb *RateBreaker) resetTick() time.Time {
+	if cb._resetTick == nil {
+		now := time.Now()
+		atomic.StorePointer(&cb._resetTick, unsafe.Pointer(&now))
+		return now
+	}
+	ptr := atomic.LoadPointer(&cb._resetTick)
+	return *(*time.Time)(ptr)
+}
+
 // NoOp returns a Breaker null object.  It implements the interface with
 // no-ops for every function.
 func NoOp() Breaker {
@@ -376,6 +466,7 @@ func (c *noOpBreaker) Trip()                           {}
 func (c *noOpBreaker) Reset()                          {}
 func (c *noOpBreaker) Break()                          {}
 func (c *noOpBreaker) Failures() int64                 { return 0 }
+func (c *noOpBreaker) Resets() int64                   { return 0 }
 func (c *noOpBreaker) Ready() bool                     { return true }
 func (c *noOpBreaker) Tripped() bool                   { return false }
 func (cb *noOpBreaker) Subscribe() <-chan BreakerEvent { return nil }
