@@ -247,8 +247,8 @@ func TestFrequencyBreakerFailures(t *testing.T) {
 
 func TestRateBreakerTripping(t *testing.T) {
 	cb := NewRateBreaker(0.5, time.Minute, 4)
-	cb.Reset()
-	cb.Reset()
+	cb.Success()
+	cb.Success()
 	cb.Fail()
 	cb.Fail()
 

@@ -32,7 +32,7 @@ func ExampleThresholdBreaker_manual() {
 			breaker.Fail()
 			log.Fatal(err)
 		} else {
-			breaker.Reset()
+			breaker.Success()
 		}
 	}
 }
