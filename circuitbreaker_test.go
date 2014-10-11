@@ -25,6 +25,28 @@ func TestBreakerTripping(t *testing.T) {
 	}
 }
 
+func TestBreakerCounts(t *testing.T) {
+	cb := &TrippableBreaker{}
+
+	cb.Fail()
+	if failures := cb.Failures(); failures != 1 {
+		t.Fatalf("expected failure count to be 1, got %d", failures)
+	}
+
+	cb.Success()
+	if successes := cb.Successes(); successes != 1 {
+		t.Fatalf("expected success count to be 1, got %d", successes)
+	}
+
+	cb.Reset()
+	if failures := cb.Failures(); failures != 0 {
+		t.Fatalf("expected failure count to be 0, got %d", failures)
+	}
+	if successes := cb.Successes(); successes != 0 {
+		t.Fatalf("expected success count to be 0, got %d", successes)
+	}
+}
+
 func TestBreakerEvents(t *testing.T) {
 	cb := NewTrippableBreaker(time.Millisecond)
 	events := cb.Subscribe()
