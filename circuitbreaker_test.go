@@ -1,8 +1,8 @@
 package circuit
 
 import (
-	// "fmt"
-	// "sync/atomic"
+	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -174,83 +174,81 @@ func TestConsecutiveBreaker(t *testing.T) {
 }
 
 //
-// func TestThresholdBreakerCalling(t *testing.T) {
-// 	circuit := func() error {
-// 		return fmt.Errorf("error")
-// 	}
-//
-// 	cb := NewThresholdBreaker(2)
-// 	cb.ResetTimeout = time.Second
-//
-// 	err := cb.Call(circuit) // First failure
-// 	if err == nil {
-// 		t.Fatal("expected threshold breaker to error")
-// 	}
-// 	if cb.Tripped() {
-// 		t.Fatal("expected threshold breaker to be open")
-// 	}
-//
-// 	err = cb.Call(circuit) // Second failure trips
-// 	if err == nil {
-// 		t.Fatal("expected threshold breaker to error")
-// 	}
-// 	if !cb.Tripped() {
-// 		t.Fatal("expected threshold breaker to be tripped")
-// 	}
-// }
-//
-// func TestThresholdBreakerResets(t *testing.T) {
-// 	called := 0
-// 	success := false
-// 	circuit := func() error {
-// 		if called == 0 {
-// 			called++
-// 			return fmt.Errorf("error")
-// 		}
-// 		success = true
-// 		return nil
-// 	}
-//
-// 	cb := NewThresholdBreaker(1)
-// 	cb.ResetTimeout = time.Millisecond
-// 	err := cb.Call(circuit)
-// 	if err == nil {
-// 		t.Fatal("Expected cb to return an error")
-// 	}
-//
-// 	time.Sleep(cb.ResetTimeout)
-// 	err = cb.Call(circuit)
-// 	if err != nil {
-// 		t.Fatal("Expected cb to be successful")
-// 	}
-//
-// 	if !success {
-// 		t.Fatal("Expected cb to have been reset")
-// 	}
-// }
-//
-//
-// func TestTimeoutBreaker(t *testing.T) {
-// 	var called int32 = 0
-// 	circuit := func() error {
-// 		atomic.AddInt32(&called, 1)
-// 		time.Sleep(time.Millisecond)
-// 		return nil
-// 	}
-//
-// 	cb := NewTimeoutBreaker(time.Millisecond, 1)
-// 	err := cb.Call(circuit)
-// 	if err == nil {
-// 		t.Fatal("expected timeout breaker to return an error")
-// 	}
-// 	cb.Call(circuit)
-//
-// 	if !cb.Tripped() {
-// 		t.Fatal("expected timeout breaker to be open")
-// 	}
-// }
-//
-//
+func TestThresholdBreakerCalling(t *testing.T) {
+	circuit := func() error {
+		return fmt.Errorf("error")
+	}
+
+	cb := NewThresholdBreaker(2)
+	cb.ResetTimeout = time.Second
+
+	err := cb.Call(circuit, 0) // First failure
+	if err == nil {
+		t.Fatal("expected threshold breaker to error")
+	}
+	if cb.Tripped() {
+		t.Fatal("expected threshold breaker to be open")
+	}
+
+	err = cb.Call(circuit, 0) // Second failure trips
+	if err == nil {
+		t.Fatal("expected threshold breaker to error")
+	}
+	if !cb.Tripped() {
+		t.Fatal("expected threshold breaker to be tripped")
+	}
+}
+
+func TestThresholdBreakerResets(t *testing.T) {
+	called := 0
+	success := false
+	circuit := func() error {
+		if called == 0 {
+			called++
+			return fmt.Errorf("error")
+		}
+		success = true
+		return nil
+	}
+
+	cb := NewThresholdBreaker(1)
+	cb.ResetTimeout = time.Millisecond
+	err := cb.Call(circuit, 0)
+	if err == nil {
+		t.Fatal("Expected cb to return an error")
+	}
+
+	time.Sleep(cb.ResetTimeout)
+	err = cb.Call(circuit, 0)
+	if err != nil {
+		t.Fatal("Expected cb to be successful")
+	}
+
+	if !success {
+		t.Fatal("Expected cb to have been reset")
+	}
+}
+
+func TestTimeoutBreaker(t *testing.T) {
+	var called int32 = 0
+	circuit := func() error {
+		atomic.AddInt32(&called, 1)
+		time.Sleep(time.Millisecond)
+		return nil
+	}
+
+	cb := NewThresholdBreaker(1)
+	err := cb.Call(circuit, time.Millisecond)
+	if err == nil {
+		t.Fatal("expected timeout breaker to return an error")
+	}
+	cb.Call(circuit, time.Millisecond)
+
+	if !cb.Tripped() {
+		t.Fatal("expected timeout breaker to be open")
+	}
+}
+
 func TestRateBreakerTripping(t *testing.T) {
 	cb := NewRateBreaker(0.5, 4)
 	cb.Success()

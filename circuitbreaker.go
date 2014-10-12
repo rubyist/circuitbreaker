@@ -209,6 +209,42 @@ func (cb *Breaker) Ready() bool {
 	return state == closed || state == halfopen
 }
 
+func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
+	var err error
+	state := cb.state()
+
+	if state == open {
+		return ErrBreakerOpen
+	}
+
+	if timeout == 0 {
+		err = circuit()
+	} else {
+		c := make(chan int, 1)
+		go func() {
+			err = circuit()
+			close(c)
+		}()
+
+		select {
+		case <-c:
+		case <-time.After(timeout):
+			err = ErrBreakerTimeout
+		}
+	}
+
+	if err != nil {
+		if state == halfopen {
+			atomic.StoreInt64(&cb.halfOpens, 0)
+		}
+		cb.Fail()
+		return err
+	}
+
+	cb.Success()
+	return nil
+}
+
 // state returns the state of the TrippableBreaker. The states available are:
 // closed - the circuit is in a reset state and is operational
 // open - the circuit is in a tripped state
