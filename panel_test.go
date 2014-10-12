@@ -41,16 +41,15 @@ func TestPanelStats(t *testing.T) {
 	p := NewPanel()
 	p.Statter = statter
 	rb := NewBreaker()
-	rb.ResetTimeout = time.Millisecond * 10
 	p.Add("breaker", rb)
 
 	rb.Fail()
 	rb.Trip()
-	time.Sleep(time.Millisecond * 11)
+	time.Sleep(rb.nextBackOff)
 	rb.Ready()
 	rb.Reset()
 
-	time.Sleep(time.Millisecond)
+	time.Sleep(rb.nextBackOff)
 
 	if c := statter.Count("circuit.breaker.tripped"); c != 1 {
 		t.Fatalf("expected trip count to be 1, got %d", c)

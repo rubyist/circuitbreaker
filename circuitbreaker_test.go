@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+func init() {
+	DefaultInitialBackOffInterval = time.Millisecond
+}
+
 func TestBreakerTripping(t *testing.T) {
 	cb := NewBreaker()
 
@@ -60,7 +64,6 @@ func TestBreakerCounts(t *testing.T) {
 
 func TestBreakerEvents(t *testing.T) {
 	cb := NewBreaker()
-	cb.ResetTimeout = time.Millisecond
 	events := cb.Subscribe()
 
 	cb.Trip()
@@ -68,7 +71,7 @@ func TestBreakerEvents(t *testing.T) {
 		t.Fatalf("expected to receive a trip event, got %d", e)
 	}
 
-	time.Sleep(cb.ResetTimeout)
+	time.Sleep(cb.nextBackOff)
 	cb.Ready()
 	if e := <-events; e != BreakerReady {
 		t.Fatalf("expected to receive a breaker ready event, got %d", e)
@@ -87,7 +90,6 @@ func TestBreakerEvents(t *testing.T) {
 
 func TestTrippableBreakerState(t *testing.T) {
 	cb := NewBreaker()
-	cb.ResetTimeout = time.Millisecond
 
 	if !cb.Ready() {
 		t.Fatal("expected breaker to be ready")
@@ -97,13 +99,13 @@ func TestTrippableBreakerState(t *testing.T) {
 	if cb.Ready() {
 		t.Fatal("expected breaker to not be ready")
 	}
-	time.Sleep(cb.ResetTimeout)
+	time.Sleep(cb.nextBackOff)
 	if !cb.Ready() {
 		t.Fatal("expected breaker to be ready after reset timeout")
 	}
 
 	cb.Fail()
-	time.Sleep(cb.ResetTimeout)
+	time.Sleep(cb.nextBackOff)
 	if !cb.Ready() {
 		t.Fatal("expected breaker to be ready after reset timeout, post failure")
 	}
@@ -111,9 +113,8 @@ func TestTrippableBreakerState(t *testing.T) {
 
 func TestTrippableBreakerManualBreak(t *testing.T) {
 	cb := NewBreaker()
-	cb.ResetTimeout = time.Millisecond
 	cb.Break()
-	time.Sleep(time.Millisecond)
+	time.Sleep(cb.nextBackOff)
 
 	if cb.Ready() {
 		t.Fatal("expected breaker to still be tripped")
@@ -121,7 +122,7 @@ func TestTrippableBreakerManualBreak(t *testing.T) {
 
 	cb.Reset()
 	cb.Trip()
-	time.Sleep(time.Millisecond)
+	time.Sleep(cb.nextBackOff)
 	if !cb.Ready() {
 		t.Fatal("expected breaker to be ready")
 	}
@@ -173,14 +174,12 @@ func TestConsecutiveBreaker(t *testing.T) {
 	}
 }
 
-//
 func TestThresholdBreakerCalling(t *testing.T) {
 	circuit := func() error {
 		return fmt.Errorf("error")
 	}
 
 	cb := NewThresholdBreaker(2)
-	cb.ResetTimeout = time.Second
 
 	err := cb.Call(circuit, 0) // First failure
 	if err == nil {
@@ -212,13 +211,12 @@ func TestThresholdBreakerResets(t *testing.T) {
 	}
 
 	cb := NewThresholdBreaker(1)
-	cb.ResetTimeout = time.Millisecond
 	err := cb.Call(circuit, 0)
 	if err == nil {
 		t.Fatal("Expected cb to return an error")
 	}
 
-	time.Sleep(cb.ResetTimeout)
+	time.Sleep(cb.nextBackOff)
 	err = cb.Call(circuit, 0)
 	if err != nil {
 		t.Fatal("Expected cb to be successful")

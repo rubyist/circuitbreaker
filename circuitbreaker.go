@@ -28,6 +28,7 @@ package circuit
 
 import (
 	"errors"
+	"github.com/cenkalti/backoff"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -56,23 +57,29 @@ var (
 	ErrBreakerTimeout = errors.New("breaker time out")
 )
 
+var DefaultInitialBackOffInterval = 500 * time.Millisecond
+
 type TripFunc func(*Breaker) bool
 
 type Breaker struct {
-	ResetTimeout   time.Duration
+	BackOff        backoff.BackOff
 	ShouldTrip     TripFunc
 	failures       int64
 	consecFailures int64
 	successes      int64
 	_lastFailure   unsafe.Pointer
 	halfOpens      int64
+	nextBackOff    time.Duration
 	tripped        int32
 	broken         int32
 	eventReceivers []chan BreakerEvent
 }
 
 func NewBreaker() *Breaker {
-	return &Breaker{ResetTimeout: time.Millisecond * 500}
+	b := backoff.NewExponentialBackOff()
+	b.InitialInterval = DefaultInitialBackOffInterval
+	b.Reset()
+	return &Breaker{BackOff: b, nextBackOff: b.NextBackOff()}
 }
 
 // NewThresholdBreaker creates a new ThresholdBreaker with the given failure threshold.
@@ -182,6 +189,9 @@ func (cb *Breaker) Fail() int64 {
 // Success records the time of a success. If the breaker was in the half open
 // state, a success will do a Reset()
 func (cb *Breaker) Success() int64 {
+	cb.BackOff.Reset()
+	cb.nextBackOff = cb.BackOff.NextBackOff()
+
 	state := cb.state()
 	if state == halfopen {
 		cb.Reset()
@@ -255,9 +265,11 @@ func (cb *Breaker) state() state {
 		if cb.broken == 1 {
 			return open
 		}
+
 		since := time.Since(cb.lastFailure())
-		if since > cb.ResetTimeout {
+		if since > cb.nextBackOff {
 			if atomic.CompareAndSwapInt64(&cb.halfOpens, 0, 1) {
+				cb.nextBackOff = cb.BackOff.NextBackOff()
 				return halfopen
 			}
 			return open
