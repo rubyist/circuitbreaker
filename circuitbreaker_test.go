@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	DefaultInitialBackOffInterval = time.Millisecond
+	defaultInitialBackOffInterval = time.Millisecond
 }
 
 func TestBreakerTripping(t *testing.T) {
