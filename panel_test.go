@@ -8,8 +8,7 @@ import (
 )
 
 func TestPanelGet(t *testing.T) {
-	noop := NoOp()
-	rb := NewTrippableBreaker(0)
+	rb := NewBreaker()
 	p := NewPanel()
 	p.Add("a", rb)
 
@@ -23,18 +22,11 @@ func TestPanelGet(t *testing.T) {
 	}
 
 	a, ok = p.Get("missing")
-	if a != noop {
-		t.Errorf("Expected 'missing' to have a %s, got %s",
-			reflect.TypeOf(noop), reflect.TypeOf(a))
-	}
-	if ok {
-		t.Error("Expected ok to be false")
-	}
 }
 
 func TestPanelAdd(t *testing.T) {
 	p := NewPanel()
-	rb := NewTrippableBreaker(0)
+	rb := NewBreaker()
 
 	p.Add("a", rb)
 
@@ -48,7 +40,8 @@ func TestPanelStats(t *testing.T) {
 	statter := newTestStatter()
 	p := NewPanel()
 	p.Statter = statter
-	rb := NewTrippableBreaker(time.Millisecond * 10)
+	rb := NewBreaker()
+	rb.ResetTimeout = time.Millisecond * 10
 	p.Add("breaker", rb)
 
 	rb.Fail()

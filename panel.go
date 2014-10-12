@@ -24,7 +24,7 @@ type Panel struct {
 	Statter      Statter
 	StatsPrefixf string
 
-	Circuits map[string]Breaker
+	Circuits map[string]*Breaker
 
 	lastTripTimes  map[string]time.Time
 	tripTimesLock  sync.RWMutex
@@ -34,14 +34,14 @@ type Panel struct {
 
 func NewPanel() *Panel {
 	return &Panel{
-		Circuits:      make(map[string]Breaker),
+		Circuits:      make(map[string]*Breaker),
 		Statter:       &noopStatter{},
 		StatsPrefixf:  defaultStatsPrefixf,
 		lastTripTimes: make(map[string]time.Time)}
 }
 
 // Add sets the name as a reference to the given circuit breaker.
-func (p *Panel) Add(name string, cb Breaker) {
+func (p *Panel) Add(name string, cb *Breaker) {
 	p.panelLock.Lock()
 	p.Circuits[name] = cb
 	p.panelLock.Unlock()
@@ -70,7 +70,7 @@ func (p *Panel) Add(name string, cb Breaker) {
 
 // Get retrieves a circuit breaker by name.  If no circuit breaker exists, it
 // returns the NoOp one and sets ok to false.
-func (p *Panel) Get(name string) (Breaker, bool) {
+func (p *Panel) Get(name string) (*Breaker, bool) {
 	p.panelLock.RLock()
 	cb, ok := p.Circuits[name]
 	p.panelLock.RUnlock()
@@ -79,7 +79,7 @@ func (p *Panel) Get(name string) (Breaker, bool) {
 		return cb, ok
 	}
 
-	return NoOp(), ok
+	return NewBreaker(), ok
 }
 
 // Subscribe returns a channel of PanelEvents. Whenever a breaker changes state,
