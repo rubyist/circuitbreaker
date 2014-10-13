@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.0.2 - 2014-10-13
+
+### Added
+- ResetCounters
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- Nothing
+
 ## 2.0.1 - 2014-10-13
 
 ### Added

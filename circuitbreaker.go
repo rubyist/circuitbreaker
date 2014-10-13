@@ -169,10 +169,15 @@ func (cb *Breaker) Trip() {
 func (cb *Breaker) Reset() {
 	atomic.StoreInt32(&cb.broken, 0)
 	atomic.StoreInt32(&cb.tripped, 0)
+	cb.ResetCounters()
+	cb.sendEvent(BreakerReset)
+}
+
+// ResetCounters will reset only the failures, consecFailures, and success counters
+func (cb *Breaker) ResetCounters() {
 	atomic.StoreInt64(&cb.failures, 0)
 	atomic.StoreInt64(&cb.consecFailures, 0)
 	atomic.StoreInt64(&cb.successes, 0)
-	cb.sendEvent(BreakerReset)
 }
 
 // Tripped returns true if the circuit breaker is tripped, false if it is reset.
