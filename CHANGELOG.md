@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.0.1 - 2014-10-13
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- Error rate should return 0.0 if there have been no samples
+
 ## 2.0.0 - 2014-10-13
 
 ### Added
