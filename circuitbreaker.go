@@ -236,6 +236,9 @@ func (cb *Breaker) ErrorRate() float64 {
 	failures := float64(cb.Failures())
 	successes := float64(cb.Successes())
 	total := failures + successes
+	if total == 0.0 {
+		return 0.0
+	}
 	return failures / total
 }
 

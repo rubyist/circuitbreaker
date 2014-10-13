@@ -62,6 +62,13 @@ func TestBreakerCounts(t *testing.T) {
 	}
 }
 
+func TestErrorRate(t *testing.T) {
+	cb := NewBreaker()
+	if er := cb.ErrorRate(); er != 0.0 {
+		t.Fatalf("expected breaker with no samples to have 0 error rate, got %f", er)
+	}
+}
+
 func TestBreakerEvents(t *testing.T) {
 	cb := NewBreaker()
 	events := cb.Subscribe()
