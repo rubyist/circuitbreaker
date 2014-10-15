@@ -2,9 +2,8 @@ package circuit
 
 import (
 	"container/ring"
-	"sync/atomic"
+	"sync"
 	"time"
-	"unsafe"
 )
 
 var (
@@ -31,9 +30,10 @@ func (b *bucket) Success() {
 }
 
 type window struct {
-	buckets     *ring.Ring
-	bucketTime  time.Duration
-	_lastAccess unsafe.Pointer
+	buckets    *ring.Ring
+	bucketTime time.Duration
+	bucketLock sync.RWMutex
+	lastAccess time.Time
 }
 
 func NewWindow(windowTime time.Duration, windowBuckets int) *window {
@@ -44,41 +44,47 @@ func NewWindow(windowTime time.Duration, windowBuckets int) *window {
 	}
 
 	bucketTime := time.Duration(windowTime.Nanoseconds() / int64(windowBuckets))
-	window := &window{buckets: buckets, bucketTime: bucketTime}
-
-	now := time.Now()
-	atomic.StorePointer(&window._lastAccess, unsafe.Pointer(&now))
-
-	return window
+	return &window{buckets: buckets, bucketTime: bucketTime, lastAccess: time.Now()}
 }
 
 func (w *window) Fail() {
 	var b *bucket
+	w.bucketLock.Lock()
+	defer w.bucketLock.Unlock()
+
 	b = w.buckets.Value.(*bucket)
 
-	if time.Since(w.lastAccess()) > w.bucketTime {
+	if time.Since(w.lastAccess) > w.bucketTime {
 		w.buckets = w.buckets.Next()
 		b = w.buckets.Value.(*bucket)
 		b.Reset()
 	}
+	w.lastAccess = time.Now()
 
 	b.Fail()
 }
 
 func (w *window) Success() {
 	var b *bucket
+	w.bucketLock.Lock()
+	defer w.bucketLock.Unlock()
+
 	b = w.buckets.Value.(*bucket)
 
-	if time.Since(w.lastAccess()) > w.bucketTime {
+	if time.Since(w.lastAccess) > w.bucketTime {
 		w.buckets = w.buckets.Next()
 		b = w.buckets.Value.(*bucket)
 		b.Reset()
 	}
+	w.lastAccess = time.Now()
 
 	b.Success()
 }
 
 func (w *window) Failures() int64 {
+	w.bucketLock.RLock()
+	defer w.bucketLock.RUnlock()
+
 	var failures int64
 	w.buckets.Do(func(x interface{}) {
 		b := x.(*bucket)
@@ -88,6 +94,9 @@ func (w *window) Failures() int64 {
 }
 
 func (w *window) Successes() int64 {
+	w.bucketLock.RLock()
+	defer w.bucketLock.RUnlock()
+
 	var successes int64
 	w.buckets.Do(func(x interface{}) {
 		b := x.(*bucket)
@@ -97,12 +106,18 @@ func (w *window) Successes() int64 {
 }
 
 func (w *window) Reset() {
+	w.bucketLock.Lock()
+	defer w.bucketLock.Unlock()
+
 	w.buckets.Do(func(x interface{}) {
 		x.(*bucket).Reset()
 	})
 }
 
 func (w *window) ErrorRate() float64 {
+	w.bucketLock.RLock()
+	defer w.bucketLock.RUnlock()
+
 	var total int64
 	var failures int64
 
@@ -117,9 +132,4 @@ func (w *window) ErrorRate() float64 {
 	}
 
 	return float64(failures) / float64(total)
-}
-
-func (w *window) lastAccess() time.Time {
-	ptr := atomic.LoadPointer(&w._lastAccess)
-	return *(*time.Time)(ptr)
 }
