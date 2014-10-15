@@ -128,6 +128,7 @@ func NewConsecutiveBreaker(threshold int64) *Breaker {
 // f = number of failures
 // s = number of successes
 // e = f / (f + s)
+// The error rate is calculated over a sliding window of 10 seconds (by default)
 // This breaker will not trip until there have been at least minSamples events.
 func NewRateBreaker(rate float64, minSamples int64) *Breaker {
 	breaker := NewBreaker()
