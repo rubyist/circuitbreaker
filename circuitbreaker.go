@@ -269,14 +269,15 @@ func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
 	if timeout == 0 {
 		err = circuit()
 	} else {
-		c := make(chan int, 1)
+		c := make(chan error)
 		go func() {
-			err = circuit()
+			c <- circuit()
 			close(c)
 		}()
 
 		select {
-		case <-c:
+		case e := <-c:
+			err = e
 		case <-time.After(timeout):
 			err = ErrBreakerTimeout
 		}
