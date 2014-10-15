@@ -61,37 +61,17 @@ func NewWindow(windowTime time.Duration, windowBuckets int) *window {
 
 // Fail records a failure in the current bucket.
 func (w *window) Fail() {
-	var b *bucket
 	w.bucketLock.Lock()
 	defer w.bucketLock.Unlock()
-
-	b = w.buckets.Value.(*bucket)
-
-	if time.Since(w.lastAccess) > w.bucketTime {
-		w.buckets = w.buckets.Next()
-		b = w.buckets.Value.(*bucket)
-		b.Reset()
-	}
-	w.lastAccess = time.Now()
-
+	b := w.getLatestBucket()
 	b.Fail()
 }
 
 // Success records a success in the current bucket.
 func (w *window) Success() {
-	var b *bucket
 	w.bucketLock.Lock()
 	defer w.bucketLock.Unlock()
-
-	b = w.buckets.Value.(*bucket)
-
-	if time.Since(w.lastAccess) > w.bucketTime {
-		w.buckets = w.buckets.Next()
-		b = w.buckets.Value.(*bucket)
-		b.Reset()
-	}
-	w.lastAccess = time.Now()
-
+	b := w.getLatestBucket()
 	b.Success()
 }
 
@@ -151,4 +131,21 @@ func (w *window) Reset() {
 	w.buckets.Do(func(x interface{}) {
 		x.(*bucket).Reset()
 	})
+}
+
+// getLatestBucket returns the current bucket. If the bucket time has elapsed
+// it will move to the next bucket, resetting its counts and updating the last
+// access time before returning it. getLatestBucket assumes that the caller has
+// locked the bucketLock
+func (w *window) getLatestBucket() *bucket {
+	var b *bucket
+	b = w.buckets.Value.(*bucket)
+
+	if time.Since(w.lastAccess) > w.bucketTime {
+		w.buckets = w.buckets.Next()
+		b = w.buckets.Value.(*bucket)
+		b.Reset()
+		w.lastAccess = time.Now()
+	}
+	return b
 }
