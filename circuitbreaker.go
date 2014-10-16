@@ -81,9 +81,8 @@ type Breaker struct {
 	// never automatically trip.
 	ShouldTrip TripFunc
 
-	failures       int64
 	consecFailures int64
-	successes      int64
+	counts         *window
 	_lastFailure   unsafe.Pointer
 	halfOpens      int64
 	nextBackOff    time.Duration
@@ -97,7 +96,11 @@ func NewBreaker() *Breaker {
 	b := backoff.NewExponentialBackOff()
 	b.InitialInterval = defaultInitialBackOffInterval
 	b.Reset()
-	return &Breaker{BackOff: b, nextBackOff: b.NextBackOff()}
+	return &Breaker{
+		BackOff:     b,
+		nextBackOff: b.NextBackOff(),
+		counts:      NewWindow(DefaultWindowTime, DefaultWindowBuckets),
+	}
 }
 
 // NewThresholdBreaker creates a Breaker with a TripFunc that trips the breaker whenever
@@ -125,6 +128,7 @@ func NewConsecutiveBreaker(threshold int64) *Breaker {
 // f = number of failures
 // s = number of successes
 // e = f / (f + s)
+// The error rate is calculated over a sliding window of 10 seconds (by default)
 // This breaker will not trip until there have been at least minSamples events.
 func NewRateBreaker(rate float64, minSamples int64) *Breaker {
 	breaker := NewBreaker()
@@ -175,9 +179,8 @@ func (cb *Breaker) Reset() {
 
 // ResetCounters will reset only the failures, consecFailures, and success counters
 func (cb *Breaker) ResetCounters() {
-	atomic.StoreInt64(&cb.failures, 0)
 	atomic.StoreInt64(&cb.consecFailures, 0)
-	atomic.StoreInt64(&cb.successes, 0)
+	cb.counts.Reset()
 }
 
 // Tripped returns true if the circuit breaker is tripped, false if it is reset.
@@ -194,7 +197,7 @@ func (cb *Breaker) Break() {
 
 // Failures returns the number of failures for this circuit breaker.
 func (cb *Breaker) Failures() int64 {
-	return atomic.LoadInt64(&cb.failures)
+	return cb.counts.Failures()
 }
 
 // ConsecFailures returns the number of consecutive failures that have occured.
@@ -204,14 +207,14 @@ func (cb *Breaker) ConsecFailures() int64 {
 
 // Successes returns the number of successes for this circuit breaker.
 func (cb *Breaker) Successes() int64 {
-	return atomic.LoadInt64(&cb.successes)
+	return cb.counts.Successes()
 }
 
 // Fail is used to indicate a failure condition the Breaker should record. It will
 // increment the failure counters and store the time of the last failure. If the
 // breaker has a TripFunc it will be called, tripping the breaker if necessary.
 func (cb *Breaker) Fail() {
-	atomic.AddInt64(&cb.failures, 1)
+	cb.counts.Fail()
 	atomic.AddInt64(&cb.consecFailures, 1)
 	now := time.Now()
 	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
@@ -232,19 +235,13 @@ func (cb *Breaker) Success() {
 		cb.Reset()
 	}
 	atomic.StoreInt64(&cb.consecFailures, 0)
-	atomic.AddInt64(&cb.successes, 1)
+	cb.counts.Success()
 }
 
 // ErrorRate returns the current error rate of the Breaker, expressed as a floating
 // point number (e.g. 0.9 for 90%), since the last time the breaker was Reset.
 func (cb *Breaker) ErrorRate() float64 {
-	failures := float64(cb.Failures())
-	successes := float64(cb.Successes())
-	total := failures + successes
-	if total == 0.0 {
-		return 0.0
-	}
-	return failures / total
+	return cb.counts.ErrorRate()
 }
 
 // Ready will return true if the circuit breaker is ready to call the function.
@@ -273,14 +270,15 @@ func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
 	if timeout == 0 {
 		err = circuit()
 	} else {
-		c := make(chan int, 1)
+		c := make(chan error)
 		go func() {
-			err = circuit()
+			c <- circuit()
 			close(c)
 		}()
 
 		select {
-		case <-c:
+		case e := <-c:
+			err = e
 		case <-time.After(timeout):
 			err = ErrBreakerTimeout
 		}
