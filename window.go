@@ -62,59 +62,59 @@ func NewWindow(windowTime time.Duration, windowBuckets int) *window {
 // Fail records a failure in the current bucket.
 func (w *window) Fail() {
 	w.bucketLock.Lock()
-	defer w.bucketLock.Unlock()
 	b := w.getLatestBucket()
 	b.Fail()
+	w.bucketLock.Unlock()
 }
 
 // Success records a success in the current bucket.
 func (w *window) Success() {
 	w.bucketLock.Lock()
-	defer w.bucketLock.Unlock()
 	b := w.getLatestBucket()
 	b.Success()
+	w.bucketLock.Unlock()
 }
 
 // Failures returns the total number of failures recorded in all buckets.
 func (w *window) Failures() int64 {
 	w.bucketLock.RLock()
-	defer w.bucketLock.RUnlock()
 
 	var failures int64
 	w.buckets.Do(func(x interface{}) {
 		b := x.(*bucket)
 		failures += b.failure
 	})
+
+	w.bucketLock.RUnlock()
 	return failures
 }
 
 // Successes returns the total number of successes recorded in all buckets.
 func (w *window) Successes() int64 {
 	w.bucketLock.RLock()
-	defer w.bucketLock.RUnlock()
 
 	var successes int64
 	w.buckets.Do(func(x interface{}) {
 		b := x.(*bucket)
 		successes += b.success
 	})
+	w.bucketLock.RUnlock()
 	return successes
 }
 
 // ErrorRate returns the error rate calculated over all buckets, expressed as
 // a floating point number (e.g. 0.9 for 90%)
 func (w *window) ErrorRate() float64 {
-	w.bucketLock.RLock()
-	defer w.bucketLock.RUnlock()
-
 	var total int64
 	var failures int64
 
+	w.bucketLock.RLock()
 	w.buckets.Do(func(x interface{}) {
 		b := x.(*bucket)
 		total += b.failure + b.success
 		failures += b.failure
 	})
+	w.bucketLock.RUnlock()
 
 	if total == 0 {
 		return 0.0
@@ -126,11 +126,11 @@ func (w *window) ErrorRate() float64 {
 // Reset resets the count of all buckets.
 func (w *window) Reset() {
 	w.bucketLock.Lock()
-	defer w.bucketLock.Unlock()
 
 	w.buckets.Do(func(x interface{}) {
 		x.(*bucket).Reset()
 	})
+	w.bucketLock.Unlock()
 }
 
 // getLatestBucket returns the current bucket. If the bucket time has elapsed
