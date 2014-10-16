@@ -1,6 +1,21 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.0 - 2014-10-16
+
+### Added
+- Failure, Sucess counts and Error Rate is now calculated over a sliding window
+- Number of buckets in the window and the time the window spans are tuneable
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- A race condition in Call()
+
 ## 2.0.2 - 2014-10-13
 
 ### Added
