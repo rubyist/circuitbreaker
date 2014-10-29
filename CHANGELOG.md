@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.1 - 2014-10-29
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- Ensure the half opens counter resets when the breaker resets, or auto-resetting may not occur
+
 ## 2.1.0 - 2014-10-16
 
 ### Added
