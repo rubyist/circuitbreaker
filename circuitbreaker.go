@@ -173,6 +173,7 @@ func (cb *Breaker) Trip() {
 func (cb *Breaker) Reset() {
 	atomic.StoreInt32(&cb.broken, 0)
 	atomic.StoreInt32(&cb.tripped, 0)
+	atomic.StoreInt64(&cb.halfOpens, 0)
 	cb.ResetCounters()
 	cb.sendEvent(BreakerReset)
 }
