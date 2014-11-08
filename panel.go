@@ -49,8 +49,7 @@ func (p *Panel) Add(name string, cb *Breaker) {
 	events := cb.Subscribe()
 
 	go func() {
-		for {
-			event := <-events
+		for event := range events {
 			for _, receiver := range p.eventReceivers {
 				receiver <- PanelEvent{name, event}
 			}
