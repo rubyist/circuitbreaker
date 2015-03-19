@@ -8,12 +8,14 @@ import (
 
 var defaultStatsPrefixf = "circuit.%s"
 
+// Statter interface provides a way to gather statistics from breakers
 type Statter interface {
 	Counter(sampleRate float32, bucket string, n ...int)
 	Timing(sampleRate float32, bucket string, d ...time.Duration)
 	Gauge(sampleRate float32, bucket string, value ...string)
 }
 
+// PanelEvent wraps a BreakerEvent and provides the string name of the breaker
 type PanelEvent struct {
 	Name  string
 	Event BreakerEvent
@@ -32,6 +34,7 @@ type Panel struct {
 	eventReceivers []chan PanelEvent
 }
 
+// NewPanel creates a new Panel
 func NewPanel() *Panel {
 	return &Panel{
 		Circuits:      make(map[string]*Breaker),

@@ -6,7 +6,7 @@ import (
 )
 
 func TestWindowCounts(t *testing.T) {
-	w := NewWindow(time.Millisecond*10, 2)
+	w := newWindow(time.Millisecond*10, 2)
 	w.Fail()
 	w.Fail()
 	w.Success()
@@ -34,7 +34,7 @@ func TestWindowCounts(t *testing.T) {
 }
 
 func TestWindowSlides(t *testing.T) {
-	w := NewWindow(time.Millisecond*10, 2)
+	w := newWindow(time.Millisecond*10, 2)
 
 	w.Fail()
 	time.Sleep(time.Millisecond * 5)
@@ -44,7 +44,7 @@ func TestWindowSlides(t *testing.T) {
 	w.buckets.Do(func(x interface{}) {
 		b := x.(*bucket)
 		if b.failure > 0 {
-			counts += 1
+			counts++
 		}
 	})
 

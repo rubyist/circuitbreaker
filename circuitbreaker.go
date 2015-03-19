@@ -38,13 +38,21 @@ import (
 	"unsafe"
 )
 
+// BreakerEvent indicates the type of event received over an event channel
 type BreakerEvent int
 
 const (
+	// BreakerTripped is sent when a breaker trips
 	BreakerTripped BreakerEvent = iota
-	BreakerReset   BreakerEvent = iota
-	BreakerFail    BreakerEvent = iota
-	BreakerReady   BreakerEvent = iota
+
+	// BreakerReset is sent when a breaker resets
+	BreakerReset BreakerEvent = iota
+
+	// BreakerFail is sent when Fail() is called
+	BreakerFail BreakerEvent = iota
+
+	// BreakerReady is sent when the breaker enters the half open state and is ready to retry
+	BreakerReady BreakerEvent = iota
 )
 
 type state int
@@ -99,7 +107,7 @@ func NewBreaker() *Breaker {
 	return &Breaker{
 		BackOff:     b,
 		nextBackOff: b.NextBackOff(),
-		counts:      NewWindow(DefaultWindowTime, DefaultWindowBuckets),
+		counts:      newWindow(DefaultWindowTime, DefaultWindowBuckets),
 	}
 }
 

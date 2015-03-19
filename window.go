@@ -7,7 +7,10 @@ import (
 )
 
 var (
-	DefaultWindowTime    = time.Millisecond * 10000
+	// DefaultWindowTime is the default time the window covers, 10 seconds.
+	DefaultWindowTime = time.Millisecond * 10000
+
+	// DefaultWindowBuckets is the default number of buckets the window holds, 10.
 	DefaultWindowBuckets = 10
 )
 
@@ -25,12 +28,12 @@ func (b *bucket) Reset() {
 
 // Fail increments the failure count
 func (b *bucket) Fail() {
-	b.failure += 1
+	b.failure++
 }
 
 // Sucecss increments the success count
 func (b *bucket) Success() {
-	b.success += 1
+	b.success++
 }
 
 // window maintains a ring of buckets and increments the failure and success
@@ -44,11 +47,11 @@ type window struct {
 	lastAccess time.Time
 }
 
-// NewWindow creates a new window. windowTime is the time covering the entire
+// newWindow creates a new window. windowTime is the time covering the entire
 // window. windowBuckets is the number of buckets the window is divided into.
 // An example: a 10 second window with 10 buckets will have 10 buckets covering
 // 1 second each.
-func NewWindow(windowTime time.Duration, windowBuckets int) *window {
+func newWindow(windowTime time.Duration, windowBuckets int) *window {
 	buckets := ring.New(windowBuckets)
 	for i := 0; i < buckets.Len(); i++ {
 		buckets.Value = &bucket{}

@@ -235,7 +235,7 @@ func TestThresholdBreakerResets(t *testing.T) {
 }
 
 func TestTimeoutBreaker(t *testing.T) {
-	var called int32 = 0
+	called := int32(0)
 	circuit := func() error {
 		atomic.AddInt32(&called, 1)
 		time.Sleep(time.Millisecond)
