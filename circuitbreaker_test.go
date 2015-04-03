@@ -224,13 +224,15 @@ func TestThresholdBreakerResets(t *testing.T) {
 	}
 
 	time.Sleep(cb.nextBackOff)
-	err = cb.Call(circuit, 0)
-	if err != nil {
-		t.Fatal("Expected cb to be successful")
-	}
+	for i := 0; i < 4; i++ {
+		err = cb.Call(circuit, 0)
+		if err != nil {
+			t.Fatal("Expected cb to be successful")
+		}
 
-	if !success {
-		t.Fatal("Expected cb to have been reset")
+		if !success {
+			t.Fatal("Expected cb to have been reset")
+		}
 	}
 }
 
@@ -276,5 +278,48 @@ func TestRateBreakerSampleSize(t *testing.T) {
 
 	if cb.Tripped() {
 		t.Fatal("expected rate breaker to not be tripped yet")
+	}
+}
+
+func TestRateBreakerResets(t *testing.T) {
+	serviceError := fmt.Errorf("service error")
+
+	called := 0
+	success := false
+	circuit := func() error {
+		if called < 4 {
+			called++
+			return serviceError
+		}
+		success = true
+		return nil
+	}
+
+	cb := NewRateBreaker(0.5, 4)
+	var err error
+	for i := 0; i < 4; i++ {
+		err = cb.Call(circuit, 0)
+		if err == nil {
+			t.Fatal("Expected cb to return an error (closed breaker, service failure)")
+		} else if err != serviceError {
+			t.Fatal("Expected cb to return error from service (closed breaker, service failure)")
+		}
+	}
+
+	err = cb.Call(circuit, 0)
+	if err == nil {
+		t.Fatal("Expected cb to return an error (open breaker)")
+	} else if err != ErrBreakerOpen {
+		t.Fatal("Expected cb to return open open breaker error (open breaker)")
+	}
+
+	time.Sleep(cb.nextBackOff)
+	err = cb.Call(circuit, 0)
+	if err != nil {
+		t.Fatal("Expected cb to be successful")
+	}
+
+	if !success {
+		t.Fatal("Expected cb to have been reset")
 	}
 }
