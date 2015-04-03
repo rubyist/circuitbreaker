@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.2 - 2015-04-03
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- Simplify Call() for rate breaker, fixing a reset bug
+
 ## 2.1.1 - 2014-10-29
 
 ### Added

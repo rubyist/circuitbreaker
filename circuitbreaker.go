@@ -270,9 +270,8 @@ func (cb *Breaker) Ready() bool {
 // than timeout to run, a failure will be recorded.
 func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
 	var err error
-	state := cb.state()
 
-	if state == open {
+	if !cb.Ready() {
 		return ErrBreakerOpen
 	}
 
@@ -294,9 +293,6 @@ func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
 	}
 
 	if err != nil {
-		if state == halfopen {
-			atomic.StoreInt64(&cb.halfOpens, 0)
-		}
 		cb.Fail()
 		return err
 	}
