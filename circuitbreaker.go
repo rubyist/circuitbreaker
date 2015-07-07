@@ -33,6 +33,7 @@ package circuit
 import (
 	"errors"
 	"github.com/cenkalti/backoff"
+	"github.com/facebookgo/clock"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -89,6 +90,9 @@ type Breaker struct {
 	// never automatically trip.
 	ShouldTrip TripFunc
 
+	// Clock is used for controlling time in tests.
+	Clock clock.Clock
+
 	consecFailures int64
 	counts         *window
 	_lastFailure   unsafe.Pointer
@@ -99,52 +103,63 @@ type Breaker struct {
 	eventReceivers []chan BreakerEvent
 }
 
-// NewBreaker creates a base breaker with an exponential backoff and no TripFunc
-func NewBreaker() *Breaker {
-	b := backoff.NewExponentialBackOff()
-	b.InitialInterval = defaultInitialBackOffInterval
-	b.Reset()
+type Options struct {
+	BackOff    backoff.BackOff
+	Clock      clock.Clock
+	ShouldTrip TripFunc
+}
+
+// NewBreakerWithOptions creates a base breaker with a specified backoff, clock and TripFunc
+func NewBreakerWithOptions(options *Options) *Breaker {
+	if options == nil {
+		options = &Options{}
+	}
+
+	if options.Clock == nil {
+		options.Clock = clock.New()
+	}
+
+	if options.BackOff == nil {
+		b := backoff.NewExponentialBackOff()
+		b.InitialInterval = defaultInitialBackOffInterval
+		b.Clock = options.Clock
+		b.Reset()
+		options.BackOff = b
+	}
+
 	return &Breaker{
-		BackOff:     b,
-		nextBackOff: b.NextBackOff(),
+		BackOff:     options.BackOff,
+		Clock:       options.Clock,
+		ShouldTrip:  options.ShouldTrip,
+		nextBackOff: options.BackOff.NextBackOff(),
 		counts:      newWindow(DefaultWindowTime, DefaultWindowBuckets),
 	}
 }
 
-// NewThresholdBreaker creates a Breaker with a TripFunc that trips the breaker whenever
-// the failure count meets the threshold.
+// NewBreaker creates a base breaker with an exponential backoff and no TripFunc
+func NewBreaker() *Breaker {
+	return NewBreakerWithOptions(nil)
+}
+
+// NewThresholdBreaker creates a Breaker with a ThresholdTripFunc.
 func NewThresholdBreaker(threshold int64) *Breaker {
-	breaker := NewBreaker()
-	breaker.ShouldTrip = func(cb *Breaker) bool {
-		return cb.Failures() == threshold
-	}
-	return breaker
+	return NewBreakerWithOptions(&Options{
+		ShouldTrip: ThresholdTripFunc(threshold),
+	})
 }
 
-// NewConsecutiveBreaker creates a Breaker with a TripFunc that trips the breaker whenever
-// the consecutive failure count meets the threshold.
+// NewConsecutiveBreaker creates a Breaker with a ConsecutiveTripFunc.
 func NewConsecutiveBreaker(threshold int64) *Breaker {
-	breaker := NewBreaker()
-	breaker.ShouldTrip = func(cb *Breaker) bool {
-		return cb.ConsecFailures() == threshold
-	}
-	return breaker
+	return NewBreakerWithOptions(&Options{
+		ShouldTrip: ConsecutiveTripFunc(threshold),
+	})
 }
 
-// NewRateBreaker creates a Breaker with a TripFunc that trips the breaker whenever the
-// error rate hits the threshold. The error rate is calculated as such:
-// f = number of failures
-// s = number of successes
-// e = f / (f + s)
-// The error rate is calculated over a sliding window of 10 seconds (by default)
-// This breaker will not trip until there have been at least minSamples events.
+// NewRateBreaker creates a Breaker with a RateTripFunc.
 func NewRateBreaker(rate float64, minSamples int64) *Breaker {
-	breaker := NewBreaker()
-	breaker.ShouldTrip = func(cb *Breaker) bool {
-		samples := cb.Failures() + cb.Successes()
-		return samples >= minSamples && cb.ErrorRate() >= rate
-	}
-	return breaker
+	return NewBreakerWithOptions(&Options{
+		ShouldTrip: RateTripFunc(rate, minSamples),
+	})
 }
 
 // Subscribe returns a channel of BreakerEvents. Whenever the breaker changes state,
@@ -171,7 +186,7 @@ func (cb *Breaker) Subscribe() <-chan BreakerEvent {
 // return true.
 func (cb *Breaker) Trip() {
 	atomic.StoreInt32(&cb.tripped, 1)
-	now := time.Now()
+	now := cb.Clock.Now()
 	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
 	cb.sendEvent(BreakerTripped)
 }
@@ -225,7 +240,7 @@ func (cb *Breaker) Successes() int64 {
 func (cb *Breaker) Fail() {
 	cb.counts.Fail()
 	atomic.AddInt64(&cb.consecFailures, 1)
-	now := time.Now()
+	now := cb.Clock.Now()
 	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
 	cb.sendEvent(BreakerFail)
 	if cb.ShouldTrip != nil && cb.ShouldTrip(cb) {
@@ -287,7 +302,7 @@ func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
 		select {
 		case e := <-c:
 			err = e
-		case <-time.After(timeout):
+		case <-cb.Clock.After(timeout):
 			err = ErrBreakerTimeout
 		}
 	}
@@ -312,7 +327,7 @@ func (cb *Breaker) state() state {
 			return open
 		}
 
-		since := time.Since(cb.lastFailure())
+		since := cb.Clock.Now().Sub(cb.lastFailure())
 		if since > cb.nextBackOff {
 			if atomic.CompareAndSwapInt64(&cb.halfOpens, 0, 1) {
 				cb.nextBackOff = cb.BackOff.NextBackOff()
@@ -333,5 +348,35 @@ func (cb *Breaker) lastFailure() time.Time {
 func (cb *Breaker) sendEvent(event BreakerEvent) {
 	for _, receiver := range cb.eventReceivers {
 		receiver <- event
+	}
+}
+
+// ThresholdTripFunc returns a TripFunc with that trips whenever
+// the failure count meets the threshold.
+func ThresholdTripFunc(threshold int64) TripFunc {
+	return func(cb *Breaker) bool {
+		return cb.Failures() == threshold
+	}
+}
+
+// ConsecutiveTripFunc returns a TripFunc that trips whenever
+// the consecutive failure count meets the threshold.
+func ConsecutiveTripFunc(threshold int64) TripFunc {
+	return func(cb *Breaker) bool {
+		return cb.ConsecFailures() == threshold
+	}
+}
+
+// RateTripFunc returns a TripFunc that trips whenever the
+// error rate hits the threshold. The error rate is calculated as such:
+// f = number of failures
+// s = number of successes
+// e = f / (f + s)
+// The error rate is calculated over a sliding window of 10 seconds (by default)
+// This TripFunc will not trip until there have been at least minSamples events.
+func RateTripFunc(rate float64, minSamples int64) TripFunc {
+	return func(cb *Breaker) bool {
+		samples := cb.Failures() + cb.Successes()
+		return samples >= minSamples && cb.ErrorRate() >= rate
 	}
 }
