@@ -2,6 +2,7 @@ package circuit
 
 import (
 	"fmt"
+	"github.com/facebookgo/clock"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -70,7 +71,9 @@ func TestErrorRate(t *testing.T) {
 }
 
 func TestBreakerEvents(t *testing.T) {
+	c := clock.NewMock()
 	cb := NewBreaker()
+	cb.Clock = c
 	events := cb.Subscribe()
 
 	cb.Trip()
@@ -78,7 +81,7 @@ func TestBreakerEvents(t *testing.T) {
 		t.Fatalf("expected to receive a trip event, got %d", e)
 	}
 
-	time.Sleep(cb.nextBackOff)
+	c.Add(cb.nextBackOff + 1)
 	cb.Ready()
 	if e := <-events; e != BreakerReady {
 		t.Fatalf("expected to receive a breaker ready event, got %d", e)
@@ -96,7 +99,9 @@ func TestBreakerEvents(t *testing.T) {
 }
 
 func TestTrippableBreakerState(t *testing.T) {
+	c := clock.NewMock()
 	cb := NewBreaker()
+	cb.Clock = c
 
 	if !cb.Ready() {
 		t.Fatal("expected breaker to be ready")
@@ -106,22 +111,24 @@ func TestTrippableBreakerState(t *testing.T) {
 	if cb.Ready() {
 		t.Fatal("expected breaker to not be ready")
 	}
-	time.Sleep(cb.nextBackOff)
+	c.Add(cb.nextBackOff + 1)
 	if !cb.Ready() {
 		t.Fatal("expected breaker to be ready after reset timeout")
 	}
 
 	cb.Fail()
-	time.Sleep(cb.nextBackOff)
+	c.Add(cb.nextBackOff + 1)
 	if !cb.Ready() {
 		t.Fatal("expected breaker to be ready after reset timeout, post failure")
 	}
 }
 
 func TestTrippableBreakerManualBreak(t *testing.T) {
+	c := clock.NewMock()
 	cb := NewBreaker()
+	cb.Clock = c
 	cb.Break()
-	time.Sleep(cb.nextBackOff)
+	c.Add(cb.nextBackOff + 1)
 
 	if cb.Ready() {
 		t.Fatal("expected breaker to still be tripped")
@@ -129,7 +136,7 @@ func TestTrippableBreakerManualBreak(t *testing.T) {
 
 	cb.Reset()
 	cb.Trip()
-	time.Sleep(cb.nextBackOff)
+	c.Add(cb.nextBackOff + 1)
 	if !cb.Ready() {
 		t.Fatal("expected breaker to be ready")
 	}
@@ -217,13 +224,15 @@ func TestThresholdBreakerResets(t *testing.T) {
 		return nil
 	}
 
+	c := clock.NewMock()
 	cb := NewThresholdBreaker(1)
+	cb.Clock = c
 	err := cb.Call(circuit, 0)
 	if err == nil {
 		t.Fatal("Expected cb to return an error")
 	}
 
-	time.Sleep(cb.nextBackOff)
+	c.Add(cb.nextBackOff + 1)
 	for i := 0; i < 4; i++ {
 		err = cb.Call(circuit, 0)
 		if err != nil {
@@ -237,14 +246,16 @@ func TestThresholdBreakerResets(t *testing.T) {
 }
 
 func TestTimeoutBreaker(t *testing.T) {
+	c := clock.NewMock()
 	called := int32(0)
 	circuit := func() error {
 		atomic.AddInt32(&called, 1)
-		time.Sleep(time.Millisecond)
+		c.Add(time.Millisecond)
 		return nil
 	}
 
 	cb := NewThresholdBreaker(1)
+	cb.Clock = c
 	err := cb.Call(circuit, time.Millisecond)
 	if err == nil {
 		t.Fatal("expected timeout breaker to return an error")
@@ -295,7 +306,9 @@ func TestRateBreakerResets(t *testing.T) {
 		return nil
 	}
 
+	c := clock.NewMock()
 	cb := NewRateBreaker(0.5, 4)
+	cb.Clock = c
 	var err error
 	for i := 0; i < 4; i++ {
 		err = cb.Call(circuit, 0)
@@ -313,7 +326,7 @@ func TestRateBreakerResets(t *testing.T) {
 		t.Fatal("Expected cb to return open open breaker error (open breaker)")
 	}
 
-	time.Sleep(cb.nextBackOff)
+	c.Add(cb.nextBackOff + 1)
 	err = cb.Call(circuit, 0)
 	if err != nil {
 		t.Fatal("Expected cb to be successful")
