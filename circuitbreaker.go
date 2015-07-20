@@ -32,11 +32,12 @@ package circuit
 
 import (
 	"errors"
-	"github.com/cenkalti/backoff"
-	"github.com/facebookgo/clock"
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/cenkalti/backoff"
+	"github.com/facebookgo/clock"
 )
 
 // BreakerEvent indicates the type of event received over an event channel
@@ -104,9 +105,11 @@ type Breaker struct {
 }
 
 type Options struct {
-	BackOff    backoff.BackOff
-	Clock      clock.Clock
-	ShouldTrip TripFunc
+	BackOff       backoff.BackOff
+	Clock         clock.Clock
+	ShouldTrip    TripFunc
+	WindowTime    time.Duration
+	WindowBuckets int
 }
 
 // NewBreakerWithOptions creates a base breaker with a specified backoff, clock and TripFunc
@@ -127,12 +130,20 @@ func NewBreakerWithOptions(options *Options) *Breaker {
 		options.BackOff = b
 	}
 
+	if options.WindowTime == 0 {
+		options.WindowTime = DefaultWindowTime
+	}
+
+	if options.WindowBuckets == 0 {
+		options.WindowBuckets = DefaultWindowBuckets
+	}
+
 	return &Breaker{
 		BackOff:     options.BackOff,
 		Clock:       options.Clock,
 		ShouldTrip:  options.ShouldTrip,
 		nextBackOff: options.BackOff.NextBackOff(),
-		counts:      newWindow(DefaultWindowTime, DefaultWindowBuckets),
+		counts:      newWindow(options.WindowTime, options.WindowBuckets),
 	}
 }
 
