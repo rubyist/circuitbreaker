@@ -137,7 +137,7 @@ func ExamplePanel_stats() {
 	breaker := NewThresholdBreaker(10)
 	panel := NewPanel()
 	panel.Statter = s
-	panel.StatsPrefixf = "sys.production"
+	panel.StatsPrefixf = "sys.production.%s"
 	panel.Add("x", breaker)
 
 	breaker.Trip()  // sys.production.circuit.x.tripped
