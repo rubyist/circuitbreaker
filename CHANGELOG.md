@@ -1,6 +1,21 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.3 - 2015-08-05
+
+### Added
+- Configurable bucket time and number [@thraxil]
+- Use mock clock for test [@andreas]
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- Bug in statsd bucket name documentation / example [@thraxil]
+
 ## 2.1.2 - 2015-04-03
 
 ### Added
