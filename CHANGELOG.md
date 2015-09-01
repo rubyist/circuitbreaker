@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.4 - 2015-09-01
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- HTTP client was using a new panel object instead of the one it added the breaker to [@ryanmurf]
+
 ## 2.1.3 - 2015-08-05
 
 ### Added
