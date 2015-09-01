@@ -69,7 +69,7 @@ func NewHTTPClientWithBreaker(breaker *Breaker, timeout time.Duration, client *h
 	panel := NewPanel()
 	panel.Add(defaultBreakerName, breaker)
 
-	brclient := &HTTPClient{Client: client, Panel: NewPanel(), timeout: timeout}
+	brclient := &HTTPClient{Client: client, Panel: panel, timeout: timeout}
 	brclient.BreakerLookup = func(c *HTTPClient, val interface{}) *Breaker {
 		cb, _ := c.Panel.Get(defaultBreakerName)
 		return cb
