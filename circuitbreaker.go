@@ -339,7 +339,7 @@ func (cb *Breaker) state() state {
 		}
 
 		since := cb.Clock.Now().Sub(cb.lastFailure())
-		if since > cb.nextBackOff {
+		if cb.nextBackOff != backoff.Stop && since > cb.nextBackOff {
 			if atomic.CompareAndSwapInt64(&cb.halfOpens, 0, 1) {
 				cb.nextBackOff = cb.BackOff.NextBackOff()
 				return halfopen

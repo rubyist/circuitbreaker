@@ -2,10 +2,12 @@ package circuit
 
 import (
 	"fmt"
-	"github.com/facebookgo/clock"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/cenkalti/backoff"
+	"github.com/facebookgo/clock"
 )
 
 func init() {
@@ -334,5 +336,25 @@ func TestRateBreakerResets(t *testing.T) {
 
 	if !success {
 		t.Fatal("Expected cb to have been reset")
+	}
+}
+
+func TestNeverRetryAfterBackoffStops(t *testing.T) {
+	cb := NewBreakerWithOptions(&Options{
+		BackOff: &backoff.StopBackOff{},
+	})
+
+	cb.Trip()
+
+	// circuit should be open and never retry again
+	// when nextBackoff is backoff.Stop
+	called := 0
+	cb.Call(func() error {
+		called = 1
+		return nil
+	}, 0)
+
+	if called == 1 {
+		t.Fatal("Expected cb to never retry")
 	}
 }
