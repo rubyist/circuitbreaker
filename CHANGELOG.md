@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.5 - 2015-11-19
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- Respect backoff.Stop [@bc-vincent-zhao]
+
 ## 2.1.4 - 2015-09-01
 
 ### Added
