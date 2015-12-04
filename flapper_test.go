@@ -3,7 +3,7 @@ package circuit
 import "testing"
 
 func TestFlapRate(t *testing.T) {
-	f := NewFlapper(20, 0.2)
+	f := NewFlapper(0.2)
 
 	f.Record(0) // 0
 	f.Record(0) // 1

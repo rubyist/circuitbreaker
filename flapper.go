@@ -1,69 +1,88 @@
 package circuit
 
+import (
+	"sync"
+	"sync/atomic"
+)
+
 type Flapper struct {
-	stateChanges []int32
-	prevState    int32
-	samples      int
-	flapRate     float64
+	lock      sync.Mutex
+	changes   int32
+	prevState int32
+	flapRate  float64
 }
 
-func NewFlapper(samples int, rate float64) *Flapper {
+func NewFlapper(flapRate float64) *Flapper {
 	return &Flapper{
-		stateChanges: make([]int32, samples),
-		samples:      samples,
-		flapRate:     rate,
+		flapRate: flapRate,
 	}
 }
 
 func (f *Flapper) Record(state int32) {
-	s := int32(0)
+	f.lock.Lock()
+	f.changes <<= 1
+
 	if f.prevState != state {
-		s = 1
+		f.changes |= 1
 	}
 
 	f.prevState = state
-
-	copy(f.stateChanges[0:f.samples-1], f.stateChanges[1:f.samples])
-	f.stateChanges[f.samples-1] = s
+	f.lock.Unlock()
 }
 
 func (f *Flapper) Rate() float64 {
-	first := 0
-	last := 0
+	changes := atomic.LoadInt32(&f.changes)
+	changes &= changeMask
 
-	for i := 0; i < f.samples; i++ {
-		if f.stateChanges[i] == 1 {
-			first = i
-			break
+	var firstBit, lastBit int32
+	var firstIdx, lastIdx int
+	var count int
+
+	for i := startBit; i > 0; i >>= 1 {
+		if i&changes > 0 {
+			if firstBit == 0 {
+				firstBit = i
+				firstIdx = count
+			}
+
+			lastBit = i
+			lastIdx = count
 		}
+
+		count++
 	}
 
-	for i := f.samples - 1; i > 0; i-- {
-		if f.stateChanges[i] == 1 {
-			last = i
-			break
-		}
-	}
-
-	spread := last - first
-	add := 0.4 / float64(spread)
-
-	if first == 0 && last == 0 {
+	if firstIdx == 0 && lastIdx == 0 {
 		return 0.0
 	}
 
-	value := 0.8
+	if firstIdx == lastIdx {
+		return 1.0 / samples
+	}
+
+	spread := lastIdx - firstIdx
+	add := valueBase / float64(spread)
+
+	value := valueStart
 	multiplier := 1
-	for i := first + 1; i <= last; i++ {
-		if f.stateChanges[i] == 1 {
+	for i := firstBit >> 1; i >= lastBit; i >>= 1 {
+		if i&changes > 0 {
 			value += (0.8 + (add * float64(multiplier)))
 		}
 		multiplier++
 	}
 
-	return value / float64(f.samples)
+	return value / samples
 }
 
 func (f *Flapper) Flapping() bool {
 	return f.Rate() >= f.flapRate
 }
+
+const (
+	changeMask = 0xFFFFF
+	startBit   = int32(0x80000)
+	valueBase  = 0.4
+	valueStart = 0.8
+	samples    = 20.0
+)
