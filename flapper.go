@@ -19,6 +19,10 @@ func NewFlapper(flapRate float64) *Flapper {
 }
 
 func (f *Flapper) Record(state int32) {
+	if f.flapRate == 0.0 {
+		return
+	}
+
 	f.lock.Lock()
 	f.changes <<= 1
 
@@ -31,6 +35,10 @@ func (f *Flapper) Record(state int32) {
 }
 
 func (f *Flapper) Rate() float64 {
+	if f.flapRate == 0.0 {
+		return 0.0
+	}
+
 	changes := atomic.LoadInt32(&f.changes)
 	changes &= changeMask
 
@@ -76,6 +84,10 @@ func (f *Flapper) Rate() float64 {
 }
 
 func (f *Flapper) Flapping() bool {
+	if f.flapRate == 0.0 {
+		return false
+	}
+
 	return f.Rate() >= f.flapRate
 }
 
