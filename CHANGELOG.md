@@ -1,6 +1,20 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.6 - 2016-02-02
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- client.Do() was not returning the error when it timed out [@ryanmurf]
+
 ## 2.1.5 - 2015-11-19
 
 ### Added
