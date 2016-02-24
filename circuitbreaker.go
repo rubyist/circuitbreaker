@@ -65,7 +65,10 @@ const (
 	closed   state = iota
 )
 
-var defaultInitialBackOffInterval = 500 * time.Millisecond
+var (
+	defaultInitialBackOffInterval = 500 * time.Millisecond
+	defaultBackoffMaxElapsedTime  = 0 * time.Second
+)
 
 // Error codes returned by Call
 var (
@@ -125,6 +128,7 @@ func NewBreakerWithOptions(options *Options) *Breaker {
 	if options.BackOff == nil {
 		b := backoff.NewExponentialBackOff()
 		b.InitialInterval = defaultInitialBackOffInterval
+		b.MaxElapsedTime = defaultBackoffMaxElapsedTime
 		b.Clock = options.Clock
 		b.Reset()
 		options.BackOff = b
