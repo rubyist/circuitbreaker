@@ -32,6 +32,7 @@ package circuit
 
 import (
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -102,6 +103,7 @@ type Breaker struct {
 	tripped        int32
 	broken         int32
 	eventReceivers []chan BreakerEvent
+	backoffLock    sync.Mutex
 }
 
 type Options struct {
@@ -262,8 +264,10 @@ func (cb *Breaker) Fail() {
 // Success is used to indicate a success condition the Breaker should record. If
 // the success was triggered by a retry attempt, the breaker will be Reset().
 func (cb *Breaker) Success() {
+	cb.backoffLock.Lock()
 	cb.BackOff.Reset()
 	cb.nextBackOff = cb.BackOff.NextBackOff()
+	cb.backoffLock.Unlock()
 
 	state := cb.state()
 	if state == halfopen {
@@ -339,6 +343,10 @@ func (cb *Breaker) state() state {
 		}
 
 		since := cb.Clock.Now().Sub(cb.lastFailure())
+
+		cb.backoffLock.Lock()
+		defer cb.backoffLock.Unlock()
+
 		if cb.nextBackOff != backoff.Stop && since > cb.nextBackOff {
 			if atomic.CompareAndSwapInt64(&cb.halfOpens, 0, 1) {
 				cb.nextBackOff = cb.BackOff.NextBackOff()
