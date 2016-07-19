@@ -143,11 +143,21 @@ func (w *window) Reset() {
 func (w *window) getLatestBucket() *bucket {
 	var b *bucket
 	b = w.buckets.Value.(*bucket)
+	elapsed := time.Since(w.lastAccess)
 
-	if time.Since(w.lastAccess) > w.bucketTime {
-		w.buckets = w.buckets.Next()
-		b = w.buckets.Value.(*bucket)
-		b.Reset()
+	if elapsed > w.bucketTime {
+		// Reset the buckets between now and number of buckets ago. If
+		// that is more that the existing buckets, reset all.
+		for i := 0; i < w.buckets.Len(); i++ {
+			w.buckets = w.buckets.Next()
+			b = w.buckets.Value.(*bucket)
+			b.Reset()
+			elapsed = time.Duration(int64(elapsed) - int64(w.bucketTime))
+			if elapsed < w.bucketTime {
+				// Done resetting buckets.
+				break
+			}
+		}
 		w.lastAccess = time.Now()
 	}
 	return b
