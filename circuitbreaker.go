@@ -308,7 +308,7 @@ func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
 	if timeout == 0 {
 		err = circuit()
 	} else {
-		c := make(chan error)
+		c := make(chan error, 1)
 		go func() {
 			c <- circuit()
 			close(c)
