@@ -51,4 +51,18 @@ func TestWindowSlides(t *testing.T) {
 	if counts != 2 {
 		t.Fatalf("expected 2 buckets to have failures, got %d", counts)
 	}
+
+	time.Sleep(15 * time.Millisecond)
+	w.Success()
+	counts = 0
+	w.buckets.Do(func(x interface{}) {
+		b := x.(*bucket)
+		if b.failure > 0 {
+			counts++
+		}
+	})
+
+	if counts != 0 {
+		t.Fatalf("expected 0 buckets to have failures, got %d", counts)
+	}
 }
