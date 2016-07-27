@@ -1,6 +1,24 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.7 - 2016-07-27
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- Set `Backoff.MaxElapsedTime` to 0 as default [@matope]
+- Use a lock when modifying `nextBackoff`
+- Fix goroutine leak when using timeouts [@isaldana]
+- Fix window buckets that should be empty [@isaldana]
+- Update backoff package, which has been renamed
+
 ## 2.1.6 - 2016-02-02
 
 ### Added
