@@ -100,6 +100,44 @@ func TestBreakerEvents(t *testing.T) {
 	}
 }
 
+func TestAddRemoveListener(t *testing.T) {
+	c := clock.NewMock()
+	cb := NewBreaker()
+	cb.Clock = c
+	events := make(chan ListenerEvent, 100)
+	cb.AddListener(events)
+
+	cb.Trip()
+	if e := <-events; e.Event != BreakerTripped {
+		t.Fatalf("expected to receive a trip event, got %d", e)
+	}
+
+	c.Add(cb.nextBackOff + 1)
+	cb.Ready()
+	if e := <-events; e.Event != BreakerReady {
+		t.Fatalf("expected to receive a breaker ready event, got %d", e)
+	}
+
+	cb.Reset()
+	if e := <-events; e.Event != BreakerReset {
+		t.Fatalf("expected to receive a reset event, got %d", e)
+	}
+
+	cb.Fail()
+	if e := <-events; e.Event != BreakerFail {
+		t.Fatalf("expected to receive a fail event, got %d", e)
+	}
+
+	cb.RemoveListener(events)
+	cb.Reset()
+	select {
+	case e := <-events:
+		t.Fatalf("after removing listener, should not receive reset event; got %s", e)
+	default:
+		// Expected.
+	}
+}
+
 func TestTrippableBreakerState(t *testing.T) {
 	c := clock.NewMock()
 	cb := NewBreaker()

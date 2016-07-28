@@ -58,6 +58,12 @@ const (
 	BreakerReady BreakerEvent = iota
 )
 
+// ListenerEvent includes a reference to the circuit breaker and the event.
+type ListenerEvent struct {
+	CB    *Breaker
+	Event BreakerEvent
+}
+
 type state int
 
 const (
@@ -106,6 +112,7 @@ type Breaker struct {
 	tripped        int32
 	broken         int32
 	eventReceivers []chan BreakerEvent
+	listeners      []chan ListenerEvent
 	backoffLock    sync.Mutex
 }
 
@@ -197,6 +204,25 @@ func (cb *Breaker) Subscribe() <-chan BreakerEvent {
 	}()
 	cb.eventReceivers = append(cb.eventReceivers, eventReader)
 	return output
+}
+
+// AddListener adds a channel of ListenerEvents on behalf of a listener.
+// The listener channel must be buffered.
+func (cb *Breaker) AddListener(listener chan ListenerEvent) {
+	cb.listeners = append(cb.listeners, listener)
+}
+
+// RemoveListener removes a channel previously added via AddListener.
+// Once removed, the channel will no longer receive ListenerEvents.
+// Returns true if the listener was found and removed.
+func (cb *Breaker) RemoveListener(listener chan ListenerEvent) bool {
+	for i, receiver := range cb.listeners {
+		if listener == receiver {
+			cb.listeners = append(cb.listeners[:i], cb.listeners[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 // Trip will trip the circuit breaker. After Trip() is called, Tripped() will
@@ -371,6 +397,15 @@ func (cb *Breaker) lastFailure() time.Time {
 func (cb *Breaker) sendEvent(event BreakerEvent) {
 	for _, receiver := range cb.eventReceivers {
 		receiver <- event
+	}
+	for _, listener := range cb.listeners {
+		le := ListenerEvent{CB: cb, Event: event}
+		select {
+		case listener <- le:
+		default:
+			<-listener
+			listener <- le
+		}
 	}
 }
 
