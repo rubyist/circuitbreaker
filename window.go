@@ -23,18 +23,26 @@ type bucket struct {
 
 // Reset resets the counts to 0
 func (b *bucket) Reset() {
-	b.failure = 0
-	b.success = 0
+	atomic.StoreInt64(&b.failure, 0)
+	atomic.StoreInt64(&b.success, 0)
 }
 
 // Fail increments the failure count
 func (b *bucket) Fail() {
-	b.failure++
+	atomic.AddInt64(&b.failure, 1)
 }
 
 // Sucecss increments the success count
 func (b *bucket) Success() {
-	b.success++
+	atomic.AddInt64(&b.success, 1)
+}
+
+func (b *bucket) Failures() int64 {
+	return atomic.LoadInt64(&b.failure)
+}
+
+func (b *bucket) Successes() int64 {
+	return atomic.LoadInt64(&b.success)
 }
 
 // window maintains a ring of buckets and increments the failure and success
@@ -107,7 +115,7 @@ func (w *window) Success() {
 func (w *window) Failures() int64 {
 	var failures int64
 	for i := 0; i < len(w.buckets); i++ {
-		failures += w.buckets[i].failure
+		failures += w.buckets[i].Failures()
 	}
 	return failures
 }
@@ -116,7 +124,7 @@ func (w *window) Failures() int64 {
 func (w *window) Successes() int64 {
 	var successes int64
 	for i := 0; i < len(w.buckets); i++ {
-		successes += w.buckets[i].success
+		successes += w.buckets[i].Successes()
 	}
 	return successes
 }
@@ -128,9 +136,9 @@ func (w *window) ErrorRate() float64 {
 	var failures int64
 
 	for i := 0; i < len(w.buckets); i++ {
-		b := w.buckets[i]
-		total += b.failure + b.success
-		failures += b.failure
+		b := &w.buckets[i]
+		total += b.Failures() + b.Successes()
+		failures += b.Failures()
 	}
 
 	if total == 0 {
