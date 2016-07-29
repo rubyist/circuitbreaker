@@ -35,7 +35,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/cenk/backoff"
 	"github.com/facebookgo/clock"
@@ -106,7 +105,7 @@ type Breaker struct {
 
 	consecFailures int64
 	counts         *window
-	_lastFailure   unsafe.Pointer
+	lastFailure    int64
 	halfOpens      int64
 	nextBackOff    time.Duration
 	tripped        int32
@@ -230,7 +229,7 @@ func (cb *Breaker) RemoveListener(listener chan ListenerEvent) bool {
 func (cb *Breaker) Trip() {
 	atomic.StoreInt32(&cb.tripped, 1)
 	now := cb.Clock.Now()
-	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
+	atomic.StoreInt64(&cb.lastFailure, now.Unix())
 	cb.sendEvent(BreakerTripped)
 }
 
@@ -284,7 +283,7 @@ func (cb *Breaker) Fail() {
 	cb.counts.Fail()
 	atomic.AddInt64(&cb.consecFailures, 1)
 	now := cb.Clock.Now()
-	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
+	atomic.StoreInt64(&cb.lastFailure, now.Unix())
 	cb.sendEvent(BreakerFail)
 	if cb.ShouldTrip != nil && cb.ShouldTrip(cb) {
 		cb.Trip()
@@ -372,7 +371,8 @@ func (cb *Breaker) state() state {
 			return open
 		}
 
-		since := cb.Clock.Now().Sub(cb.lastFailure())
+		last := atomic.LoadInt64(&cb.lastFailure)
+		since := cb.Clock.Now().Sub(time.Unix(last, 0))
 
 		cb.backoffLock.Lock()
 		defer cb.backoffLock.Unlock()
@@ -387,11 +387,6 @@ func (cb *Breaker) state() state {
 		return open
 	}
 	return closed
-}
-
-func (cb *Breaker) lastFailure() time.Time {
-	ptr := atomic.LoadPointer(&cb._lastFailure)
-	return *(*time.Time)(ptr)
 }
 
 func (cb *Breaker) sendEvent(event BreakerEvent) {
