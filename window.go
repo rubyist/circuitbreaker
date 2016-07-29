@@ -50,8 +50,8 @@ func (b *bucket) Successes() int64 {
 // advance to the next bucket, reseting its counts. This allows the keeping of
 // rolling statistics on the counts.
 type window struct {
-	buckets    []bucket
 	bucketIdx  int64
+	buckets    []bucket
 	clock      clock.Clock
 	stop       chan struct{}
 	bucketTime time.Duration
@@ -62,14 +62,12 @@ type window struct {
 // An example: a 10 second window with 10 buckets will have 10 buckets covering
 // 1 second each.
 func newWindow(windowTime time.Duration, windowBuckets int, clock clock.Clock) *window {
-	w := &window{
+	return &window{
 		buckets:    make([]bucket, windowBuckets),
 		bucketTime: time.Duration(windowTime.Nanoseconds() / int64(windowBuckets)),
 		clock:      clock,
 		stop:       make(chan struct{}),
 	}
-
-	return w
 }
 
 // Run starts the goroutine that increments the bucket index and sets up the
