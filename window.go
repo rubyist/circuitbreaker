@@ -1,8 +1,7 @@
 package circuit
 
 import (
-	"container/ring"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/facebookgo/clock"
@@ -43,75 +42,82 @@ func (b *bucket) Success() {
 // advance to the next bucket, reseting its counts. This allows the keeping of
 // rolling statistics on the counts.
 type window struct {
-	buckets    *ring.Ring
-	bucketTime time.Duration
-	bucketLock sync.RWMutex
-	lastAccess time.Time
+	buckets    []bucket
+	bucketIdx  int64
 	clock      clock.Clock
+	stop       chan struct{}
+	bucketTime time.Duration
 }
 
 // newWindow creates a new window. windowTime is the time covering the entire
 // window. windowBuckets is the number of buckets the window is divided into.
 // An example: a 10 second window with 10 buckets will have 10 buckets covering
 // 1 second each.
-func newWindow(windowTime time.Duration, windowBuckets int) *window {
-	buckets := ring.New(windowBuckets)
-	for i := 0; i < buckets.Len(); i++ {
-		buckets.Value = &bucket{}
-		buckets = buckets.Next()
-	}
-
-	clock := clock.New()
-
-	bucketTime := time.Duration(windowTime.Nanoseconds() / int64(windowBuckets))
-	return &window{
-		buckets:    buckets,
-		bucketTime: bucketTime,
+func newWindow(windowTime time.Duration, windowBuckets int, clock clock.Clock) *window {
+	w := &window{
+		buckets:    make([]bucket, windowBuckets),
+		bucketTime: time.Duration(windowTime.Nanoseconds() / int64(windowBuckets)),
 		clock:      clock,
-		lastAccess: clock.Now(),
+		stop:       make(chan struct{}),
 	}
+
+	return w
+}
+
+// Run starts the goroutine that increments the bucket index and sets up the
+// next bucket.
+func (w *window) Run() {
+	c := make(chan struct{})
+	go func() {
+		close(c)
+		ticker := w.clock.Ticker(w.bucketTime)
+		for {
+			select {
+			case <-ticker.C:
+				idx := atomic.LoadInt64(&w.bucketIdx)
+				idx = (idx + 1) % int64(len(w.buckets))
+				w.buckets[idx].Reset()
+				atomic.StoreInt64(&w.bucketIdx, idx)
+			case <-w.stop:
+				return
+			}
+		}
+	}()
+	<-c
+}
+
+// Stop stops the index incrementing goroutine.
+func (w *window) Stop() {
+	w.stop <- struct{}{}
 }
 
 // Fail records a failure in the current bucket.
 func (w *window) Fail() {
-	w.bucketLock.Lock()
-	b := w.getLatestBucket()
-	b.Fail()
-	w.bucketLock.Unlock()
+	idx := atomic.LoadInt64(&w.bucketIdx)
+	w.buckets[idx].Fail()
 }
 
 // Success records a success in the current bucket.
 func (w *window) Success() {
-	w.bucketLock.Lock()
-	b := w.getLatestBucket()
-	b.Success()
-	w.bucketLock.Unlock()
+	idx := atomic.LoadInt64(&w.bucketIdx)
+	w.buckets[idx].Success()
 }
 
 // Failures returns the total number of failures recorded in all buckets.
 func (w *window) Failures() int64 {
-	w.bucketLock.RLock()
-
 	var failures int64
-	w.buckets.Do(func(x interface{}) {
-		b := x.(*bucket)
-		failures += b.failure
-	})
-
-	w.bucketLock.RUnlock()
+	for i := 0; i < len(w.buckets); i++ {
+		failures += w.buckets[i].failure
+	}
 	return failures
 }
 
 // Successes returns the total number of successes recorded in all buckets.
 func (w *window) Successes() int64 {
-	w.bucketLock.RLock()
-
 	var successes int64
-	w.buckets.Do(func(x interface{}) {
-		b := x.(*bucket)
-		successes += b.success
-	})
-	w.bucketLock.RUnlock()
+	for i := 0; i < len(w.buckets); i++ {
+		successes += w.buckets[i].success
+	}
 	return successes
 }
 
@@ -121,13 +127,11 @@ func (w *window) ErrorRate() float64 {
 	var total int64
 	var failures int64
 
-	w.bucketLock.RLock()
-	w.buckets.Do(func(x interface{}) {
-		b := x.(*bucket)
+	for i := 0; i < len(w.buckets); i++ {
+		b := w.buckets[i]
 		total += b.failure + b.success
 		failures += b.failure
-	})
-	w.bucketLock.RUnlock()
+	}
 
 	if total == 0 {
 		return 0.0
@@ -138,37 +142,7 @@ func (w *window) ErrorRate() float64 {
 
 // Reset resets the count of all buckets.
 func (w *window) Reset() {
-	w.bucketLock.Lock()
-
-	w.buckets.Do(func(x interface{}) {
-		x.(*bucket).Reset()
-	})
-	w.bucketLock.Unlock()
-}
-
-// getLatestBucket returns the current bucket. If the bucket time has elapsed
-// it will move to the next bucket, resetting its counts and updating the last
-// access time before returning it. getLatestBucket assumes that the caller has
-// locked the bucketLock
-func (w *window) getLatestBucket() *bucket {
-	var b *bucket
-	b = w.buckets.Value.(*bucket)
-	elapsed := w.clock.Now().Sub(w.lastAccess)
-
-	if elapsed > w.bucketTime {
-		// Reset the buckets between now and number of buckets ago. If
-		// that is more that the existing buckets, reset all.
-		for i := 0; i < w.buckets.Len(); i++ {
-			w.buckets = w.buckets.Next()
-			b = w.buckets.Value.(*bucket)
-			b.Reset()
-			elapsed = time.Duration(int64(elapsed) - int64(w.bucketTime))
-			if elapsed < w.bucketTime {
-				// Done resetting buckets.
-				break
-			}
-		}
-		w.lastAccess = w.clock.Now()
+	for i := 0; i < len(w.buckets); i++ {
+		w.buckets[i].Reset()
 	}
-	return b
 }

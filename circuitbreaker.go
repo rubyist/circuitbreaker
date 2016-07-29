@@ -150,12 +150,15 @@ func NewBreakerWithOptions(options *Options) *Breaker {
 		options.WindowBuckets = DefaultWindowBuckets
 	}
 
+	win := newWindow(options.WindowTime, options.WindowBuckets, options.Clock)
+	win.Run()
+
 	return &Breaker{
 		BackOff:     options.BackOff,
 		Clock:       options.Clock,
 		ShouldTrip:  options.ShouldTrip,
 		nextBackOff: options.BackOff.NextBackOff(),
-		counts:      newWindow(options.WindowTime, options.WindowBuckets),
+		counts:      win,
 	}
 }
 
