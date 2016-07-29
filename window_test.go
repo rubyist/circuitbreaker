@@ -1,6 +1,7 @@
 package circuit
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -40,6 +41,7 @@ func TestWindowSlides(t *testing.T) {
 
 	w := newWindow(time.Millisecond*10, 2, c)
 	w.Run()
+	runtime.Gosched()
 
 	w.Fail()
 	c.Add(time.Millisecond * 5)
@@ -58,6 +60,7 @@ func TestWindowSlides(t *testing.T) {
 	}
 
 	w.Run()
+	runtime.Gosched()
 	c.Add(time.Millisecond * 15)
 	w.Success()
 	w.Stop()

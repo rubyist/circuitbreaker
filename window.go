@@ -55,6 +55,7 @@ type window struct {
 	clock      clock.Clock
 	stop       chan struct{}
 	bucketTime time.Duration
+	isRunning  bool
 }
 
 // newWindow creates a new window. windowTime is the time covering the entire
@@ -73,9 +74,11 @@ func newWindow(windowTime time.Duration, windowBuckets int, clock clock.Clock) *
 // Run starts the goroutine that increments the bucket index and sets up the
 // next bucket.
 func (w *window) Run() {
-	c := make(chan struct{})
+	if w.isRunning {
+		return
+	}
+
 	go func() {
-		close(c)
 		ticker := w.clock.Ticker(w.bucketTime)
 		for {
 			select {
@@ -89,11 +92,14 @@ func (w *window) Run() {
 			}
 		}
 	}()
-	<-c
 }
 
 // Stop stops the index incrementing goroutine.
 func (w *window) Stop() {
+	if !w.isRunning {
+		return
+	}
+
 	w.stop <- struct{}{}
 }
 
