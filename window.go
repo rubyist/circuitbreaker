@@ -4,6 +4,8 @@ import (
 	"container/ring"
 	"sync"
 	"time"
+
+	"github.com/facebookgo/clock"
 )
 
 var (
@@ -45,6 +47,7 @@ type window struct {
 	bucketTime time.Duration
 	bucketLock sync.RWMutex
 	lastAccess time.Time
+	clock      clock.Clock
 }
 
 // newWindow creates a new window. windowTime is the time covering the entire
@@ -58,8 +61,15 @@ func newWindow(windowTime time.Duration, windowBuckets int) *window {
 		buckets = buckets.Next()
 	}
 
+	clock := clock.New()
+
 	bucketTime := time.Duration(windowTime.Nanoseconds() / int64(windowBuckets))
-	return &window{buckets: buckets, bucketTime: bucketTime, lastAccess: time.Now()}
+	return &window{
+		buckets:    buckets,
+		bucketTime: bucketTime,
+		clock:      clock,
+		lastAccess: clock.Now(),
+	}
 }
 
 // Fail records a failure in the current bucket.
@@ -143,7 +153,7 @@ func (w *window) Reset() {
 func (w *window) getLatestBucket() *bucket {
 	var b *bucket
 	b = w.buckets.Value.(*bucket)
-	elapsed := time.Since(w.lastAccess)
+	elapsed := w.clock.Now().Sub(w.lastAccess)
 
 	if elapsed > w.bucketTime {
 		// Reset the buckets between now and number of buckets ago. If
@@ -158,7 +168,7 @@ func (w *window) getLatestBucket() *bucket {
 				break
 			}
 		}
-		w.lastAccess = time.Now()
+		w.lastAccess = w.clock.Now()
 	}
 	return b
 }

@@ -3,6 +3,8 @@ package circuit
 import (
 	"testing"
 	"time"
+
+	"github.com/facebookgo/clock"
 )
 
 func TestWindowCounts(t *testing.T) {
@@ -34,10 +36,14 @@ func TestWindowCounts(t *testing.T) {
 }
 
 func TestWindowSlides(t *testing.T) {
+	c := clock.NewMock()
+
 	w := newWindow(time.Millisecond*10, 2)
+	w.clock = c
+	w.lastAccess = c.Now()
 
 	w.Fail()
-	time.Sleep(time.Millisecond * 5)
+	c.Add(time.Millisecond * 6)
 	w.Fail()
 
 	counts := 0
@@ -52,7 +58,7 @@ func TestWindowSlides(t *testing.T) {
 		t.Fatalf("expected 2 buckets to have failures, got %d", counts)
 	}
 
-	time.Sleep(15 * time.Millisecond)
+	c.Add(time.Millisecond * 15)
 	w.Success()
 	counts = 0
 	w.buckets.Do(func(x interface{}) {
