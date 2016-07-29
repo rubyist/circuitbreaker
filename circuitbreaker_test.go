@@ -286,21 +286,37 @@ func TestThresholdBreakerResets(t *testing.T) {
 }
 
 func TestTimeoutBreaker(t *testing.T) {
+	wait := make(chan struct{})
+
 	c := clock.NewMock()
 	called := int32(0)
+
 	circuit := func() error {
+		wait <- struct{}{}
 		atomic.AddInt32(&called, 1)
-		c.Add(time.Millisecond)
+		<-wait
 		return nil
 	}
 
 	cb := NewThresholdBreaker(1)
 	cb.Clock = c
-	err := cb.Call(circuit, time.Millisecond)
+
+	errc := make(chan error)
+	go func() { errc <- cb.Call(circuit, time.Millisecond) }()
+
+	<-wait
+	c.Add(time.Millisecond * 3)
+	wait <- struct{}{}
+
+	err := <-errc
 	if err == nil {
 		t.Fatal("expected timeout breaker to return an error")
 	}
-	cb.Call(circuit, time.Millisecond)
+
+	go cb.Call(circuit, time.Millisecond)
+	<-wait
+	c.Add(time.Millisecond * 3)
+	wait <- struct{}{}
 
 	if !cb.Tripped() {
 		t.Fatal("expected timeout breaker to be open")
