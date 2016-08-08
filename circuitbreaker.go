@@ -368,7 +368,7 @@ func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
 func (cb *Breaker) state() state {
 	tripped := cb.Tripped()
 	if tripped {
-		if cb.broken == 1 {
+		if atomic.LoadInt32(&cb.broken) == 1 {
 			return open
 		}
 
