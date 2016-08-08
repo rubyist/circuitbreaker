@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func ExampleThresholdBreaker() {
+func ExampleNewThresholdBreaker() {
 	// This example sets up a ThresholdBreaker that will trip if remoteCall returns
 	// an error 10 times in a row. The error returned by Call() will be the error
 	// returned by remoteCall, unless the breaker has been tripped, in which case
@@ -22,12 +22,12 @@ func ExampleThresholdBreaker() {
 	}
 }
 
-func ExampleThresholdBreaker_manual() {
+func ExampleNewThresholdBreaker_manual() {
 	// This example demonstrates the manual use of a ThresholdBreaker. The breaker
 	// will trip when Fail is called 10 times in a row.
 	breaker := NewThresholdBreaker(10)
 	if breaker.Ready() {
-		err := remoteCall
+		err := remoteCall()
 		if err != nil {
 			breaker.Fail()
 			log.Fatal(err)
@@ -37,12 +37,13 @@ func ExampleThresholdBreaker_manual() {
 	}
 }
 
-func ExampleTimeoutBreaker() {
-	// This example sets up a TimeoutBreaker that will trip if remoteCall returns
-	// an error OR takes longer than one second 10 times in a row. The error returned
-	// by Call() will be the error returned by remoteCall with two exceptions: if
-	// remoteCall takes longer than one second the return value will be ErrBreakerTimeout,
-	// if the breaker has been tripped the return value will be ErrBreakerOpen.
+func ExampleNewThresholdBreaker_timeout() {
+	// This example sets up a ThresholdBreaker that will trip if remoteCall
+	// returns an error OR takes longer than one second 10 times in a row. The
+	// error returned by Call() will be the error returned by remoteCall with
+	// two exceptions: if remoteCall takes longer than one second the return
+	// value will be ErrBreakerTimeout, if the breaker has been tripped the
+	// return value will be ErrBreakerOpen.
 	breaker := NewThresholdBreaker(10)
 	err := breaker.Call(remoteCall, time.Second)
 	if err != nil {
@@ -50,7 +51,7 @@ func ExampleTimeoutBreaker() {
 	}
 }
 
-func ExampleConsecutiveBreaker() {
+func ExampleNewConsecutiveBreaker() {
 	// This example sets up a FrequencyBreaker that will trip if remoteCall returns
 	// an error 10 times in a row within a period of 2 minutes.
 	breaker := NewConsecutiveBreaker(10)
@@ -61,8 +62,8 @@ func ExampleConsecutiveBreaker() {
 }
 
 func ExampleHTTPClient() {
-	// This example sets up an HTTP client wrapped in a TimeoutBreaker. The breaker
-	// will trip with the same behavior as TimeoutBreaker.
+	// This example sets up an HTTP client wrapped in a ThresholdBreaker. The
+	// breaker will trip with the same behavior as ThresholdBreaker.
 	client := NewHTTPClient(time.Second*5, 10, nil)
 
 	resp, err := client.Get("http://example.com/resource.json")
