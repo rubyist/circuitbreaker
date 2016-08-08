@@ -115,6 +115,7 @@ type Breaker struct {
 	backoffLock    sync.Mutex
 }
 
+// Options holds breaker configuration options.
 type Options struct {
 	BackOff       backoff.BackOff
 	Clock         clock.Clock
