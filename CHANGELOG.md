@@ -1,6 +1,23 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.2.0 - 2016-08-09
+
+### Added
+- Externally provided event listener channel (@spencerkimball)
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- Reduce allocations around last failure time storage
+- Use the Clock for window code as well
+- Remove test data race
+- Fix race condition in `state()` (@tamird)
+
 ## 2.1.7 - 2016-07-27
 
 ### Added

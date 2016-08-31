@@ -109,30 +109,30 @@ func TestAddRemoveListener(t *testing.T) {
 
 	cb.Trip()
 	if e := <-events; e.Event != BreakerTripped {
-		t.Fatalf("expected to receive a trip event, got %d", e)
+		t.Fatalf("expected to receive a trip event, got %v", e)
 	}
 
 	c.Add(cb.nextBackOff + 1)
 	cb.Ready()
 	if e := <-events; e.Event != BreakerReady {
-		t.Fatalf("expected to receive a breaker ready event, got %d", e)
+		t.Fatalf("expected to receive a breaker ready event, got %v", e)
 	}
 
 	cb.Reset()
 	if e := <-events; e.Event != BreakerReset {
-		t.Fatalf("expected to receive a reset event, got %d", e)
+		t.Fatalf("expected to receive a reset event, got %v", e)
 	}
 
 	cb.Fail()
 	if e := <-events; e.Event != BreakerFail {
-		t.Fatalf("expected to receive a fail event, got %d", e)
+		t.Fatalf("expected to receive a fail event, got %v", e)
 	}
 
 	cb.RemoveListener(events)
 	cb.Reset()
 	select {
 	case e := <-events:
-		t.Fatalf("after removing listener, should not receive reset event; got %s", e)
+		t.Fatalf("after removing listener, should not receive reset event; got %v", e)
 	default:
 		// Expected.
 	}
