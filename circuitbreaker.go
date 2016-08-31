@@ -32,11 +32,11 @@ package circuit
 
 import (
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenk/backoff"
 	"github.com/facebookgo/clock"
 )
 
@@ -57,6 +57,12 @@ const (
 	BreakerReady BreakerEvent = iota
 )
 
+// ListenerEvent includes a reference to the circuit breaker and the event.
+type ListenerEvent struct {
+	CB    *Breaker
+	Event BreakerEvent
+}
+
 type state int
 
 const (
@@ -65,7 +71,10 @@ const (
 	closed   state = iota
 )
 
-var defaultInitialBackOffInterval = 500 * time.Millisecond
+var (
+	defaultInitialBackOffInterval = 500 * time.Millisecond
+	defaultBackoffMaxElapsedTime  = 0 * time.Second
+)
 
 // Error codes returned by Call
 var (
@@ -97,14 +106,17 @@ type Breaker struct {
 	consecFailures int64
 	counts         *window
 	flapper        *Flapper
-	_lastFailure   unsafe.Pointer
+	lastFailure    int64
 	halfOpens      int64
 	nextBackOff    time.Duration
 	tripped        int32
 	broken         int32
 	eventReceivers []chan BreakerEvent
+	listeners      []chan ListenerEvent
+	backoffLock    sync.Mutex
 }
 
+// Options holds breaker configuration options.
 type Options struct {
 	BackOff       backoff.BackOff
 	Clock         clock.Clock
@@ -127,6 +139,7 @@ func NewBreakerWithOptions(options *Options) *Breaker {
 	if options.BackOff == nil {
 		b := backoff.NewExponentialBackOff()
 		b.InitialInterval = defaultInitialBackOffInterval
+		b.MaxElapsedTime = defaultBackoffMaxElapsedTime
 		b.Clock = options.Clock
 		b.Reset()
 		options.BackOff = b
@@ -196,13 +209,32 @@ func (cb *Breaker) Subscribe() <-chan BreakerEvent {
 	return output
 }
 
+// AddListener adds a channel of ListenerEvents on behalf of a listener.
+// The listener channel must be buffered.
+func (cb *Breaker) AddListener(listener chan ListenerEvent) {
+	cb.listeners = append(cb.listeners, listener)
+}
+
+// RemoveListener removes a channel previously added via AddListener.
+// Once removed, the channel will no longer receive ListenerEvents.
+// Returns true if the listener was found and removed.
+func (cb *Breaker) RemoveListener(listener chan ListenerEvent) bool {
+	for i, receiver := range cb.listeners {
+		if listener == receiver {
+			cb.listeners = append(cb.listeners[:i], cb.listeners[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
 // Trip will trip the circuit breaker. After Trip() is called, Tripped() will
 // return true.
 func (cb *Breaker) Trip() {
 	cb.flapper.Record(1)
 	atomic.StoreInt32(&cb.tripped, 1)
 	now := cb.Clock.Now()
-	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
+	atomic.StoreInt64(&cb.lastFailure, now.Unix())
 	cb.sendEvent(BreakerTripped)
 }
 
@@ -265,7 +297,7 @@ func (cb *Breaker) Fail() {
 	cb.counts.Fail()
 	atomic.AddInt64(&cb.consecFailures, 1)
 	now := cb.Clock.Now()
-	atomic.StorePointer(&cb._lastFailure, unsafe.Pointer(&now))
+	atomic.StoreInt64(&cb.lastFailure, now.Unix())
 	cb.sendEvent(BreakerFail)
 	if cb.ShouldTrip != nil && cb.ShouldTrip(cb) {
 		cb.Trip()
@@ -275,8 +307,10 @@ func (cb *Breaker) Fail() {
 // Success is used to indicate a success condition the Breaker should record. If
 // the success was triggered by a retry attempt, the breaker will be Reset().
 func (cb *Breaker) Success() {
+	cb.backoffLock.Lock()
 	cb.BackOff.Reset()
 	cb.nextBackOff = cb.BackOff.NextBackOff()
+	cb.backoffLock.Unlock()
 
 	state := cb.state()
 	if state == halfopen {
@@ -317,7 +351,7 @@ func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
 	if timeout == 0 {
 		err = circuit()
 	} else {
-		c := make(chan error)
+		c := make(chan error, 1)
 		go func() {
 			c <- circuit()
 			close(c)
@@ -347,11 +381,16 @@ func (cb *Breaker) Call(circuit func() error, timeout time.Duration) error {
 func (cb *Breaker) state() state {
 	tripped := cb.Tripped()
 	if tripped {
-		if cb.broken == 1 {
+		if atomic.LoadInt32(&cb.broken) == 1 {
 			return open
 		}
 
-		since := cb.Clock.Now().Sub(cb.lastFailure())
+		last := atomic.LoadInt64(&cb.lastFailure)
+		since := cb.Clock.Now().Sub(time.Unix(last, 0))
+
+		cb.backoffLock.Lock()
+		defer cb.backoffLock.Unlock()
+
 		if cb.nextBackOff != backoff.Stop && since > cb.nextBackOff {
 			if atomic.CompareAndSwapInt64(&cb.halfOpens, 0, 1) {
 				cb.nextBackOff = cb.BackOff.NextBackOff()
@@ -364,14 +403,18 @@ func (cb *Breaker) state() state {
 	return closed
 }
 
-func (cb *Breaker) lastFailure() time.Time {
-	ptr := atomic.LoadPointer(&cb._lastFailure)
-	return *(*time.Time)(ptr)
-}
-
 func (cb *Breaker) sendEvent(event BreakerEvent) {
 	for _, receiver := range cb.eventReceivers {
 		receiver <- event
+	}
+	for _, listener := range cb.listeners {
+		le := ListenerEvent{CB: cb, Event: event}
+		select {
+		case listener <- le:
+		default:
+			<-listener
+			listener <- le
+		}
 	}
 }
 

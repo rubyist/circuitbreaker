@@ -1,6 +1,55 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.2.0 - 2016-08-09
+
+### Added
+- Externally provided event listener channel (@spencerkimball)
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- Reduce allocations around last failure time storage
+- Use the Clock for window code as well
+- Remove test data race
+- Fix race condition in `state()` (@tamird)
+
+## 2.1.7 - 2016-07-27
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- Set `Backoff.MaxElapsedTime` to 0 as default [@matope]
+- Use a lock when modifying `nextBackoff`
+- Fix goroutine leak when using timeouts [@isaldana]
+- Fix window buckets that should be empty [@isaldana]
+- Update backoff package, which has been renamed
+
+## 2.1.6 - 2016-02-02
+
+### Added
+- Nothing
+
+### Deprecated
+- Nothing
+
+### Removed
+- Nothing
+
+### Fixed
+- client.Do() was not returning the error when it timed out [@ryanmurf]
+
 ## 2.1.5 - 2015-11-19
 
 ### Added
