@@ -105,6 +105,7 @@ type Breaker struct {
 
 	consecFailures int64
 	counts         *window
+	flapper        *Flapper
 	lastFailure    int64
 	halfOpens      int64
 	nextBackOff    time.Duration
@@ -122,6 +123,7 @@ type Options struct {
 	ShouldTrip    TripFunc
 	WindowTime    time.Duration
 	WindowBuckets int
+	FlapRate      float64
 }
 
 // NewBreakerWithOptions creates a base breaker with a specified backoff, clock and TripFunc
@@ -157,6 +159,7 @@ func NewBreakerWithOptions(options *Options) *Breaker {
 		ShouldTrip:  options.ShouldTrip,
 		nextBackOff: options.BackOff.NextBackOff(),
 		counts:      newWindow(options.WindowTime, options.WindowBuckets),
+		flapper:     NewFlapper(options.FlapRate),
 	}
 }
 
@@ -228,6 +231,7 @@ func (cb *Breaker) RemoveListener(listener chan ListenerEvent) bool {
 // Trip will trip the circuit breaker. After Trip() is called, Tripped() will
 // return true.
 func (cb *Breaker) Trip() {
+	cb.flapper.Record(1)
 	atomic.StoreInt32(&cb.tripped, 1)
 	now := cb.Clock.Now()
 	atomic.StoreInt64(&cb.lastFailure, now.Unix())
@@ -237,6 +241,15 @@ func (cb *Breaker) Trip() {
 // Reset will reset the circuit breaker. After Reset() is called, Tripped() will
 // return false.
 func (cb *Breaker) Reset() {
+	cb.flapper.Record(0)
+
+	if cb.flapper.Flapping() {
+		// Remain in half open and increase the backoff
+		atomic.StoreInt64(&cb.halfOpens, 0)
+		cb.nextBackOff = cb.BackOff.NextBackOff()
+		return
+	}
+
 	atomic.StoreInt32(&cb.broken, 0)
 	atomic.StoreInt32(&cb.tripped, 0)
 	atomic.StoreInt64(&cb.halfOpens, 0)
