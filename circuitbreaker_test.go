@@ -412,3 +412,28 @@ func TestNeverRetryAfterBackoffStops(t *testing.T) {
 		t.Fatal("Expected cb to never retry")
 	}
 }
+
+// TestPartialSecondBackoff ensures that the breaker event less than nextBackoff value
+// time after tripping the breaker isn't allowed.
+func TestPartialSecondBackoff(t *testing.T) {
+	c := clock.NewMock()
+	cb := NewBreaker()
+	cb.Clock = c
+
+	// Set the time to 0.5 seconds after the epoch, then trip the breaker.
+	c.Add(500 * time.Millisecond)
+	cb.Trip()
+
+	// Move forward 100 milliseconds in time and ensure that the backoff time
+	// is set to a larger number than the clock advanced.
+	c.Add(100 * time.Millisecond)
+	cb.nextBackOff = 500 * time.Millisecond
+	if cb.Ready() {
+		t.Fatalf("expected breaker not to be ready after less time than nextBackoff had passed")
+	}
+
+	c.Add(401 * time.Millisecond)
+	if !cb.Ready() {
+		t.Fatalf("expected breaker to be ready after more than nextBackoff time had passed")
+	}
+}
