@@ -105,7 +105,7 @@ type Breaker struct {
 
 	consecFailures int64
 	counts         *window
-	lastFailure    int64
+	lastFailure    int64 // stored as nanoseconds since the Unix epoch
 	halfOpens      int64
 	nextBackOff    time.Duration
 	tripped        int32
@@ -230,7 +230,7 @@ func (cb *Breaker) RemoveListener(listener chan ListenerEvent) bool {
 func (cb *Breaker) Trip() {
 	atomic.StoreInt32(&cb.tripped, 1)
 	now := cb.Clock.Now()
-	atomic.StoreInt64(&cb.lastFailure, now.Unix())
+	atomic.StoreInt64(&cb.lastFailure, now.UnixNano())
 	cb.sendEvent(BreakerTripped)
 }
 
@@ -284,7 +284,7 @@ func (cb *Breaker) Fail() {
 	cb.counts.Fail()
 	atomic.AddInt64(&cb.consecFailures, 1)
 	now := cb.Clock.Now()
-	atomic.StoreInt64(&cb.lastFailure, now.Unix())
+	atomic.StoreInt64(&cb.lastFailure, now.UnixNano())
 	cb.sendEvent(BreakerFail)
 	if cb.ShouldTrip != nil && cb.ShouldTrip(cb) {
 		cb.Trip()
@@ -373,7 +373,7 @@ func (cb *Breaker) state() state {
 		}
 
 		last := atomic.LoadInt64(&cb.lastFailure)
-		since := cb.Clock.Now().Sub(time.Unix(last, 0))
+		since := cb.Clock.Now().Sub(time.Unix(0, last))
 
 		cb.backoffLock.Lock()
 		defer cb.backoffLock.Unlock()
