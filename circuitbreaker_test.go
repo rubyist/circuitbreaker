@@ -1,6 +1,7 @@
 package circuit
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -244,6 +245,42 @@ func TestThresholdBreakerCalling(t *testing.T) {
 	}
 
 	err = cb.Call(circuit, 0) // Second failure trips
+	if err == nil {
+		t.Fatal("expected threshold breaker to error")
+	}
+	if !cb.Tripped() {
+		t.Fatal("expected threshold breaker to be tripped")
+	}
+}
+
+func TestThresholdBreakerCallingContext(t *testing.T) {
+	circuit := func() error {
+		return fmt.Errorf("error")
+	}
+
+	cb := NewThresholdBreaker(2)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	err := cb.CallContext(ctx, circuit, 0) // First failure
+	if err == nil {
+		t.Fatal("expected threshold breaker to error")
+	}
+	if cb.Tripped() {
+		t.Fatal("expected threshold breaker to be open")
+	}
+
+	// Cancel the next Call.
+	cancel()
+
+	err = cb.CallContext(ctx, circuit, 0) // Second failure but it's canceled
+	if err == nil {
+		t.Fatal("expected threshold breaker to error")
+	}
+	if cb.Tripped() {
+		t.Fatal("expected threshold breaker to be open")
+	}
+
+	err = cb.CallContext(context.Background(), circuit, 0) // Thirt failure trips
 	if err == nil {
 		t.Fatal("expected threshold breaker to error")
 	}
