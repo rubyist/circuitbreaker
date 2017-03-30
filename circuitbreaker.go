@@ -104,10 +104,11 @@ type Breaker struct {
 	// Clock is used for controlling time in tests.
 	Clock clock.Clock
 
+	_              [4]byte // pad to fix golang issue #599
 	consecFailures int64
-	counts         *window
 	lastFailure    int64 // stored as nanoseconds since the Unix epoch
 	halfOpens      int64
+	counts         *window
 	nextBackOff    time.Duration
 	tripped        int32
 	broken         int32
