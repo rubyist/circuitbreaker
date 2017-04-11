@@ -3,7 +3,7 @@ package circuit
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
+	"runtime"
 	"testing"
 	"time"
 
@@ -253,6 +253,52 @@ func TestThresholdBreakerCalling(t *testing.T) {
 	}
 }
 
+func TestThresholdBreakerErrorHistory(t *testing.T) {
+	cb := NewThresholdBreaker(2)
+	err := fmt.Errorf("error 1")
+	cb.FailWithError(err)
+	if cb.LastError() != err {
+		t.Fatal("expected last error to be `error 1`")
+	}
+
+	cb = NewThresholdBreaker(1)
+	if cb.LastError() != nil {
+		t.Fatalf("expected last error to be `nil`, got %s", cb.LastError())
+	}
+
+	err = cb.Call(func() error {
+		return fmt.Errorf("circuit error")
+	}, 0)
+	if err == nil {
+		t.Fatal("expected threshold breaker to error")
+	}
+	if !cb.Tripped() {
+		t.Fatal("expected threshold breaker to be open")
+	}
+	if cb.LastError().Error() != "circuit error" {
+		t.Fatalf("expected last error to be `circut error`, got %s", cb.LastError())
+	}
+
+	cb.Success()
+	cb.Call(func() error {
+		return fmt.Errorf("circuit error 1")
+	}, 0)
+	if cb.LastError().Error() != "circuit error 1" {
+		t.Fatalf("expected last error to be `circut error 1`, got %s", cb.LastError())
+	}
+
+	errs := cb.Errors()
+	if len(errs) != 2 {
+		t.Fatalf("expected `%d` errors, got %d", 2, len(errs))
+	}
+	if errs[0].Error() != "circuit error" {
+		t.Fatalf("expected `%s` error, got %s", "circuit error", errs[0].Error())
+	}
+	if errs[1].Error() != "circuit error 1" {
+		t.Fatalf("expected `%s` error, got %s", "circuit error 1", errs[0].Error())
+	}
+}
+
 func TestThresholdBreakerCallingContext(t *testing.T) {
 	circuit := func() error {
 		return fmt.Errorf("error")
@@ -323,15 +369,10 @@ func TestThresholdBreakerResets(t *testing.T) {
 }
 
 func TestTimeoutBreaker(t *testing.T) {
-	wait := make(chan struct{})
-
 	c := clock.NewMock()
-	called := int32(0)
 
 	circuit := func() error {
-		wait <- struct{}{}
-		atomic.AddInt32(&called, 1)
-		<-wait
+		time.Sleep(100000000 * time.Millisecond)
 		return nil
 	}
 
@@ -339,21 +380,29 @@ func TestTimeoutBreaker(t *testing.T) {
 	cb.Clock = c
 
 	errc := make(chan error)
-	go func() { errc <- cb.Call(circuit, time.Millisecond) }()
-
+	wait := make(chan struct{})
+	go func() { wait <- struct{}{}; errc <- cb.Call(circuit, time.Millisecond) }()
 	<-wait
-	c.Add(time.Millisecond * 3)
-	wait <- struct{}{}
+	// yield and advance the clock
+	runtime.Gosched()
+	c.Add(time.Millisecond * 1000)
 
 	err := <-errc
-	if err == nil {
-		t.Fatal("expected timeout breaker to return an error")
+	if err != ErrBreakerTimeout {
+		t.Fatalf("expected timeout breaker to return an error `%s`, got %s", ErrBreakerTimeout, err)
 	}
 
-	go cb.Call(circuit, time.Millisecond)
+	cb.Clock = clock.NewMock()
+	go func() { wait <- struct{}{}; errc <- cb.Call(circuit, time.Millisecond) }()
 	<-wait
+	// yield and advance the clock
+	runtime.Gosched()
 	c.Add(time.Millisecond * 3)
-	wait <- struct{}{}
+
+	err = <-errc
+	if err != ErrBreakerOpen {
+		t.Fatalf("expected timeout breaker to return an error `%s`, got %s", ErrBreakerOpen, err)
+	}
 
 	if !cb.Tripped() {
 		t.Fatal("expected timeout breaker to be open")
