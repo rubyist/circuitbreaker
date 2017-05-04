@@ -121,6 +121,8 @@ type Breaker struct {
 
 	//ring buffer for last N errors
 	errorsBuffer *ring.Ring
+	// errorsBufferLock used to prevent race accessing errorsBuffer (RWMutex is slower and atomic.Value same performance)
+	errorsBufferLock sync.Mutex
 }
 
 // Options holds breaker configuration options.
@@ -307,6 +309,9 @@ func (cb *Breaker) Fail() {
 
 // FailWithError is the same as Fail, but keeps history of errors in internal ring buffer
 func (cb *Breaker) FailWithError(err error) {
+	cb.errorsBufferLock.Lock()
+	defer cb.errorsBufferLock.Unlock()
+
 	cb.errorsBuffer = cb.errorsBuffer.Next()
 	cb.errorsBuffer.Value = err
 	cb.Fail()
@@ -314,6 +319,9 @@ func (cb *Breaker) FailWithError(err error) {
 
 // LastError returns last error from internal buffer
 func (cb *Breaker) LastError() error {
+	cb.errorsBufferLock.Lock()
+	defer cb.errorsBufferLock.Unlock()
+
 	if cb.errorsBuffer.Value == nil {
 		return ErrBreakerNoErrorRecorded
 	}
@@ -322,6 +330,9 @@ func (cb *Breaker) LastError() error {
 
 // Errors returns all errors from internal buffer
 func (cb *Breaker) Errors() (errors []error) {
+	cb.errorsBufferLock.Lock()
+	defer cb.errorsBufferLock.Unlock()
+
 	// reserve capacity to move last error to the end of slice without realloc
 	errors = make([]error, 0, cb.errorsBuffer.Len()+1)
 	cb.errorsBuffer.Do(func(x interface{}) {
