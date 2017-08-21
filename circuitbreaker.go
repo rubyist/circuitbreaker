@@ -199,8 +199,8 @@ func (cb *Breaker) Subscribe() <-chan BreakerEvent {
 			select {
 			case output <- v:
 			default:
-				<-output
-				output <- v
+				//<-output this may bloack ignore the event 
+				//output <- v
 			}
 		}
 	}()
@@ -409,8 +409,8 @@ func (cb *Breaker) sendEvent(event BreakerEvent) {
 		select {
 		case listener <- le:
 		default:
-			<-listener
-			listener <- le
+			//<-listener this may block ;ignore the event
+			//listener <- le
 		}
 	}
 }
