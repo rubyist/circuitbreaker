@@ -33,6 +33,7 @@ package circuit
 import (
 	"context"
 	"errors"
+
 	"sync"
 	"sync/atomic"
 	"time"
@@ -153,12 +154,14 @@ func NewBreakerWithOptions(options *Options) *Breaker {
 		options.WindowBuckets = DefaultWindowBuckets
 	}
 
+	win := newWindow(options.WindowTime, options.WindowBuckets, options.Clock)
+	win.Run()
 	return &Breaker{
 		BackOff:     options.BackOff,
 		Clock:       options.Clock,
 		ShouldTrip:  options.ShouldTrip,
 		nextBackOff: options.BackOff.NextBackOff(),
-		counts:      newWindow(options.WindowTime, options.WindowBuckets),
+		counts:      win,
 	}
 }
 
@@ -199,8 +202,6 @@ func (cb *Breaker) Subscribe() <-chan BreakerEvent {
 			select {
 			case output <- v:
 			default:
-				//<-output this may bloack ignore the event 
-				//output <- v
 			}
 		}
 	}()
@@ -296,14 +297,14 @@ func (cb *Breaker) Fail() {
 // Success is used to indicate a success condition the Breaker should record. If
 // the success was triggered by a retry attempt, the breaker will be Reset().
 func (cb *Breaker) Success() {
-	cb.backoffLock.Lock()
-	cb.BackOff.Reset()
-	cb.nextBackOff = cb.BackOff.NextBackOff()
-	cb.backoffLock.Unlock()
 
-	state := cb.state()
-	if state == halfopen {
+	if cb.Tripped() {
 		cb.Reset()
+		cb.backoffLock.Lock()
+		cb.BackOff.Reset()
+		cb.nextBackOff = cb.BackOff.NextBackOff()
+		cb.backoffLock.Unlock()
+
 	}
 	atomic.StoreInt64(&cb.consecFailures, 0)
 	cb.counts.Success()
@@ -319,9 +320,9 @@ func (cb *Breaker) ErrorRate() float64 {
 // It will be ready if the breaker is in a reset state, or if it is time to retry
 // the call for auto resetting.
 func (cb *Breaker) Ready() bool {
+
 	state := cb.state()
 	if state == halfopen {
-		atomic.StoreInt64(&cb.halfOpens, 0)
 		cb.sendEvent(BreakerReady)
 	}
 	return state == closed || state == halfopen
@@ -342,7 +343,6 @@ func (cb *Breaker) CallContext(ctx context.Context, circuit func() error, timeou
 	if !cb.Ready() {
 		return ErrBreakerOpen
 	}
-
 	if timeout == 0 {
 		err = circuit()
 	} else {
@@ -389,12 +389,11 @@ func (cb *Breaker) state() state {
 		defer cb.backoffLock.Unlock()
 
 		if cb.nextBackOff != backoff.Stop && since > cb.nextBackOff {
-			if atomic.CompareAndSwapInt64(&cb.halfOpens, 0, 1) {
-				cb.nextBackOff = cb.BackOff.NextBackOff()
-				return halfopen
-			}
-			return open
+			cb.nextBackOff = cb.BackOff.NextBackOff()
+			return halfopen
+
 		}
+
 		return open
 	}
 	return closed
@@ -409,8 +408,7 @@ func (cb *Breaker) sendEvent(event BreakerEvent) {
 		select {
 		case listener <- le:
 		default:
-			//<-listener this may block ;ignore the event
-			//listener <- le
+
 		}
 	}
 }
