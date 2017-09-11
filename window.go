@@ -94,17 +94,23 @@ func (w *window) Success() {
 
 // Failures returns the total number of failures recorded in all buckets.
 func (w *window) Failures() int64 {
+	w.bucketLock.RLock()
+	defer w.bucketLock.RUnlock()
 	return w.failure
 }
 
 // Successes returns the total number of successes recorded in all buckets.
 func (w *window) Successes() int64 {
+	w.bucketLock.RLock()
+	defer w.bucketLock.RUnlock()
 	return w.success
 }
 
 // ErrorRate returns the error rate calculated over all buckets, expressed as
 // a floating point number (e.g. 0.9 for 90%)
 func (w *window) ErrorRate() float64 {
+	w.bucketLock.RLock()
+	defer w.bucketLock.RUnlock()
 	total := w.success + w.failure
 	if total == 0 {
 		return 0.0
