@@ -47,6 +47,8 @@ type window struct {
 	bucketTime time.Duration
 	bucketLock sync.RWMutex
 	lastAccess time.Time
+	success    int64
+	failure    int64
 	clock      clock.Clock
 }
 
@@ -77,6 +79,7 @@ func (w *window) Fail() {
 	w.bucketLock.Lock()
 	b := w.getLatestBucket()
 	b.Fail()
+	w.failure++
 	w.bucketLock.Unlock()
 }
 
@@ -85,61 +88,36 @@ func (w *window) Success() {
 	w.bucketLock.Lock()
 	b := w.getLatestBucket()
 	b.Success()
+	w.success++
 	w.bucketLock.Unlock()
 }
 
 // Failures returns the total number of failures recorded in all buckets.
 func (w *window) Failures() int64 {
-	w.bucketLock.RLock()
-
-	var failures int64
-	w.buckets.Do(func(x interface{}) {
-		b := x.(*bucket)
-		failures += b.failure
-	})
-
-	w.bucketLock.RUnlock()
-	return failures
+	return w.failure
 }
 
 // Successes returns the total number of successes recorded in all buckets.
 func (w *window) Successes() int64 {
-	w.bucketLock.RLock()
-
-	var successes int64
-	w.buckets.Do(func(x interface{}) {
-		b := x.(*bucket)
-		successes += b.success
-	})
-	w.bucketLock.RUnlock()
-	return successes
+	return w.success
 }
 
 // ErrorRate returns the error rate calculated over all buckets, expressed as
 // a floating point number (e.g. 0.9 for 90%)
 func (w *window) ErrorRate() float64 {
-	var total int64
-	var failures int64
-
-	w.bucketLock.RLock()
-	w.buckets.Do(func(x interface{}) {
-		b := x.(*bucket)
-		total += b.failure + b.success
-		failures += b.failure
-	})
-	w.bucketLock.RUnlock()
-
+	total := w.success + w.failure
 	if total == 0 {
 		return 0.0
 	}
 
-	return float64(failures) / float64(total)
+	return float64(w.failure) / float64(total)
 }
 
 // Reset resets the count of all buckets.
 func (w *window) Reset() {
 	w.bucketLock.Lock()
-
+	w.success = 0
+	w.failure = 0
 	w.buckets.Do(func(x interface{}) {
 		x.(*bucket).Reset()
 	})
@@ -161,6 +139,8 @@ func (w *window) getLatestBucket() *bucket {
 		for i := 0; i < w.buckets.Len(); i++ {
 			w.buckets = w.buckets.Next()
 			b = w.buckets.Value.(*bucket)
+			w.success -= b.success
+			w.failure -= b.failure
 			b.Reset()
 			elapsed = time.Duration(int64(elapsed) - int64(w.bucketTime))
 			if elapsed < w.bucketTime {
