@@ -2,8 +2,10 @@ package circuit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -522,4 +524,21 @@ func TestPartialSecondBackoff(t *testing.T) {
 	if !cb.Ready() {
 		t.Fatalf("expected breaker to be ready after more than nextBackoff time had passed")
 	}
+}
+
+// TestGoroutineSafe verifies that the circuit breaker can be used concurrently
+// without race conditions
+func TestGoroutineSafe(t *testing.T) {
+	cb := NewBreaker()
+	wg := sync.WaitGroup{}
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cb.FailWithError(errors.New("x"))
+			cb.LastError()
+			cb.Errors()
+		}()
+	}
+	wg.Wait()
 }
