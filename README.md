@@ -1,4 +1,4 @@
-[![Travis](https://img.shields.io/travis/rust-lang/rust.svg?style=plastic)]()
+[![Travis](https://img.shields.io/travis/rust-lang/rust.svg?style=plastic)]()[![Github All Releases](https://img.shields.io/github/downloads/atom/atom/total.svg?style=plastic)]()
 # circuitbreaker
 
 Circuitbreaker provides an easy way to use the Circuit Breaker pattern in a
