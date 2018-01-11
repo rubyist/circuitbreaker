@@ -1,3 +1,4 @@
+[![Travis](https://img.shields.io/travis/rust-lang/rust.svg?style=plastic)]()
 # circuitbreaker
 
 Circuitbreaker provides an easy way to use the Circuit Breaker pattern in a
