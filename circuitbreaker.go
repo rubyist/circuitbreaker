@@ -361,7 +361,9 @@ func (cb *Breaker) CallContext(ctx context.Context, circuit func() error, timeou
 	}
 
 	if err != nil {
-		if ctx.Err() != context.Canceled {
+		switch ctx.Err() {
+		case context.Canceled, context.DeadlineExceeded:
+		default:
 			cb.Fail()
 		}
 		return err
