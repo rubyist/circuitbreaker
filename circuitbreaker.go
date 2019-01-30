@@ -96,6 +96,9 @@ type Breaker struct {
 	// policy by default.
 	BackOff backoff.BackOff
 
+	// the last error in track
+	LastError error
+
 	// ShouldTrip is a TripFunc that determines whether a Fail() call should trip the breaker.
 	// A breaker created with NewBreaker will not have a ShouldTrip by default, and thus will
 	// never automatically trip.
@@ -242,6 +245,7 @@ func (cb *Breaker) Reset() {
 	atomic.StoreInt32(&cb.broken, 0)
 	atomic.StoreInt32(&cb.tripped, 0)
 	atomic.StoreInt64(&cb.halfOpens, 0)
+	cb.LastError = nil
 	cb.ResetCounters()
 	cb.sendEvent(BreakerReset)
 }
@@ -362,6 +366,7 @@ func (cb *Breaker) CallContext(ctx context.Context, circuit func() error, timeou
 
 	if err != nil {
 		if ctx.Err() != context.Canceled {
+			cb.LastError = err
 			cb.Fail()
 		}
 		return err
