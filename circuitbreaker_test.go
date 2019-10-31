@@ -2,6 +2,7 @@ package circuit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -472,5 +473,15 @@ func TestPartialSecondBackoff(t *testing.T) {
 	c.Add(401 * time.Millisecond)
 	if !cb.Ready() {
 		t.Fatalf("expected breaker to be ready after more than nextBackoff time had passed")
+	}
+}
+func TestHehe(t *testing.T) {
+	cb := NewConsecutiveBreaker(10)
+
+	for {
+		cb.Call(func() error {
+			fmt.Println("error", time.Now())
+			return errors.New("sss")
+		}, 0)
 	}
 }
