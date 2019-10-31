@@ -360,15 +360,23 @@ func (cb *Breaker) CallContext(ctx context.Context, circuit func() error, timeou
 		}
 	}
 
-	if err != nil {
-		if ctx.Err() != context.Canceled {
-			cb.Fail()
-		}
-		return err
+	if err == nil {
+		cb.Success()
+		return nil
 	}
 
-	cb.Success()
-	return nil
+	switch ctx.Err() {
+	case context.Canceled:
+	case context.DeadlineExceeded:
+		// If the breaker timed out as well, report that,
+		// otherwise consider it "neutral".
+		if err == ErrBreakerTimeout {
+			cb.Fail()
+		}
+	default:
+		cb.Fail()
+	}
+	return err
 }
 
 // state returns the state of the TrippableBreaker. The states available are:
