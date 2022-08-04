@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/facebookgo/clock"
+	"github.com/benbjohnson/clock"
 )
 
 func init() {
