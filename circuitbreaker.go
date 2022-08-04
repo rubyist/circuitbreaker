@@ -38,7 +38,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/facebookgo/clock"
+	"github.com/benbjohnson/clock"
 )
 
 // BreakerEvent indicates the type of event received over an event channel

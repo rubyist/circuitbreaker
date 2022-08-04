@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/facebookgo/clock"
+	"github.com/benbjohnson/clock"
 )
 
 var (
