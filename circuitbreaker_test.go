@@ -323,15 +323,12 @@ func TestThresholdBreakerResets(t *testing.T) {
 }
 
 func TestTimeoutBreaker(t *testing.T) {
-	wait := make(chan struct{})
-
 	c := clock.NewMock()
-	called := int32(0)
+	var called int32
 
 	circuit := func() error {
-		wait <- struct{}{}
 		atomic.AddInt32(&called, 1)
-		<-wait
+		c.Add(time.Millisecond * 3)
 		return nil
 	}
 
@@ -341,19 +338,16 @@ func TestTimeoutBreaker(t *testing.T) {
 	errc := make(chan error)
 	go func() { errc <- cb.Call(circuit, time.Millisecond) }()
 
-	<-wait
-	c.Add(time.Millisecond * 3)
-	wait <- struct{}{}
-
 	err := <-errc
 	if err == nil {
 		t.Fatal("expected timeout breaker to return an error")
 	}
 
+	if atomic.LoadInt32(&called) != 1 {
+		t.Fatal("expected circuit be called once")
+	}
+
 	go cb.Call(circuit, time.Millisecond)
-	<-wait
-	c.Add(time.Millisecond * 3)
-	wait <- struct{}{}
 
 	if !cb.Tripped() {
 		t.Fatal("expected timeout breaker to be open")
