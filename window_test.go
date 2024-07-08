@@ -1,6 +1,7 @@
 package circuit
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -8,7 +9,7 @@ import (
 )
 
 func TestWindowCounts(t *testing.T) {
-	w := newWindow(time.Millisecond*10, 2)
+	w := newWindow(time.Millisecond*10, 2, clock.NewMock())
 	w.Fail()
 	w.Fail()
 	w.Success()
@@ -38,35 +39,38 @@ func TestWindowCounts(t *testing.T) {
 func TestWindowSlides(t *testing.T) {
 	c := clock.NewMock()
 
-	w := newWindow(time.Millisecond*10, 2)
-	w.clock = c
-	w.lastAccess = c.Now()
+	w := newWindow(time.Millisecond*10, 2, c)
+	w.Run()
+	runtime.Gosched()
 
 	w.Fail()
-	c.Add(time.Millisecond * 6)
+	c.Add(time.Millisecond * 5)
 	w.Fail()
+	w.Stop()
 
 	counts := 0
-	w.buckets.Do(func(x interface{}) {
-		b := x.(*bucket)
+	for _, b := range w.buckets {
 		if b.failure > 0 {
 			counts++
 		}
-	})
+	}
 
 	if counts != 2 {
 		t.Fatalf("expected 2 buckets to have failures, got %d", counts)
 	}
 
+	w.Run()
+	runtime.Gosched()
 	c.Add(time.Millisecond * 15)
 	w.Success()
+	w.Stop()
+
 	counts = 0
-	w.buckets.Do(func(x interface{}) {
-		b := x.(*bucket)
+	for _, b := range w.buckets {
 		if b.failure > 0 {
 			counts++
 		}
-	})
+	}
 
 	if counts != 0 {
 		t.Fatalf("expected 0 buckets to have failures, got %d", counts)
