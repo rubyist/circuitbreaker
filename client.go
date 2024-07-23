@@ -94,7 +94,8 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 	breaker := c.breakerLookup(req.URL.String())
-	err = breaker.Call(func() error {
+	ctx := req.Context()
+	err = breaker.CallContext(ctx, func() error {
 		resp, err = c.Client.Do(req)
 		return err
 	}, c.timeout)
