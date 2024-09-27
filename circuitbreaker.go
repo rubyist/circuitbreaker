@@ -31,6 +31,7 @@
 package circuit
 
 import (
+	"container/ring"
 	"context"
 	"errors"
 	"sync"
@@ -75,12 +76,14 @@ const (
 var (
 	defaultInitialBackOffInterval = 500 * time.Millisecond
 	defaultBackoffMaxElapsedTime  = 0 * time.Second
+	defaultErrorHistoryDepth      = 10
 )
 
 // Error codes returned by Call
 var (
-	ErrBreakerOpen    = errors.New("breaker open")
-	ErrBreakerTimeout = errors.New("breaker time out")
+	ErrBreakerOpen            = errors.New("breaker open")
+	ErrBreakerTimeout         = errors.New("breaker time out")
+	ErrBreakerNoErrorRecorded = errors.New("no error in breaker history")
 )
 
 // TripFunc is a function called by a Breaker's Fail() function and determines whether
@@ -115,15 +118,21 @@ type Breaker struct {
 	eventReceivers []chan BreakerEvent
 	listeners      []chan ListenerEvent
 	backoffLock    sync.Mutex
+
+	//ring buffer for last N errors
+	errorsBuffer *ring.Ring
+	// errorsBufferLock used to prevent race accessing errorsBuffer (RWMutex is slower and atomic.Value same performance)
+	errorsBufferLock sync.Mutex
 }
 
 // Options holds breaker configuration options.
 type Options struct {
-	BackOff       backoff.BackOff
-	Clock         clock.Clock
-	ShouldTrip    TripFunc
-	WindowTime    time.Duration
-	WindowBuckets int
+	BackOff           backoff.BackOff
+	Clock             clock.Clock
+	ShouldTrip        TripFunc
+	WindowTime        time.Duration
+	WindowBuckets     int
+	ErrorHistoryDepth int
 }
 
 // NewBreakerWithOptions creates a base breaker with a specified backoff, clock and TripFunc
@@ -153,12 +162,17 @@ func NewBreakerWithOptions(options *Options) *Breaker {
 		options.WindowBuckets = DefaultWindowBuckets
 	}
 
+	if options.ErrorHistoryDepth <= 0 {
+		options.ErrorHistoryDepth = defaultErrorHistoryDepth
+	}
+
 	return &Breaker{
-		BackOff:     options.BackOff,
-		Clock:       options.Clock,
-		ShouldTrip:  options.ShouldTrip,
-		nextBackOff: options.BackOff.NextBackOff(),
-		counts:      newWindow(options.WindowTime, options.WindowBuckets),
+		BackOff:      options.BackOff,
+		Clock:        options.Clock,
+		ShouldTrip:   options.ShouldTrip,
+		nextBackOff:  options.BackOff.NextBackOff(),
+		counts:       newWindow(options.WindowTime, options.WindowBuckets),
+		errorsBuffer: ring.New(options.ErrorHistoryDepth),
 	}
 }
 
@@ -293,6 +307,44 @@ func (cb *Breaker) Fail() {
 	}
 }
 
+// FailWithError is the same as Fail, but keeps history of errors in internal ring buffer
+func (cb *Breaker) FailWithError(err error) {
+	cb.errorsBufferLock.Lock()
+	defer cb.errorsBufferLock.Unlock()
+
+	cb.errorsBuffer = cb.errorsBuffer.Next()
+	cb.errorsBuffer.Value = err
+	cb.Fail()
+}
+
+// LastError returns last error from internal buffer
+func (cb *Breaker) LastError() error {
+	cb.errorsBufferLock.Lock()
+	defer cb.errorsBufferLock.Unlock()
+
+	if cb.errorsBuffer.Value == nil {
+		return ErrBreakerNoErrorRecorded
+	}
+	return cb.errorsBuffer.Value.(error)
+}
+
+// Errors returns all errors from internal buffer
+func (cb *Breaker) Errors() (errors []error) {
+	cb.errorsBufferLock.Lock()
+	defer cb.errorsBufferLock.Unlock()
+
+	// reserve capacity to move last error to the end of slice without realloc
+	errors = make([]error, 0, cb.errorsBuffer.Len()+1)
+	cb.errorsBuffer.Do(func(x interface{}) {
+		if x != nil {
+			errors = append(errors, x.(error))
+		}
+	})
+	// move last error to the end
+	errors = append(errors[1:], errors[0])
+	return errors
+}
+
 // Success is used to indicate a success condition the Breaker should record. If
 // the success was triggered by a retry attempt, the breaker will be Reset().
 func (cb *Breaker) Success() {
@@ -302,7 +354,9 @@ func (cb *Breaker) Success() {
 	cb.backoffLock.Unlock()
 
 	state := cb.state()
-	if state == halfopen {
+	// if state was halfopen and it's successful request this state will be `open`.
+	// due to cb.halfOpens is 1 at this point (request grouping)
+	if state == halfopen || state == open {
 		cb.Reset()
 	}
 	atomic.StoreInt64(&cb.consecFailures, 0)
@@ -362,7 +416,7 @@ func (cb *Breaker) CallContext(ctx context.Context, circuit func() error, timeou
 
 	if err != nil {
 		if ctx.Err() != context.Canceled {
-			cb.Fail()
+			cb.FailWithError(err)
 		}
 		return err
 	}
