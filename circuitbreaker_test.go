@@ -474,3 +474,45 @@ func TestPartialSecondBackoff(t *testing.T) {
 		t.Fatalf("expected breaker to be ready after more than nextBackoff time had passed")
 	}
 }
+
+// TestBreakerEvent_String ensures that BreakerEvent implements Stringer interfaces properly
+func TestBreakerEvent_String(t *testing.T) {
+	tests := []struct {
+		name string
+		e    BreakerEvent
+		want string
+	}{
+		{
+			name: "BreakerTripped",
+			e:    BreakerTripped,
+			want: "breaker is open",
+		},
+		{
+			name: "BreakerReset",
+			e:    BreakerReset,
+			want: "breaker is closed",
+		},
+		{
+			name: "BreakerFail",
+			e:    BreakerFail,
+			want: "Fail() was called",
+		},
+		{
+			name: "BreakerReady",
+			e:    BreakerReady,
+			want: "breaker is ready to retry",
+		},
+		{
+			name: "UnknownBreakerEvent",
+			e:    BreakerEvent(9999),
+			want: "unknown event",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.e.String(); got != tt.want {
+				t.Errorf("BreakerEvent.String() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

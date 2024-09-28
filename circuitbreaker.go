@@ -58,6 +58,22 @@ const (
 	BreakerReady BreakerEvent = iota
 )
 
+// String returns BreakerEvent description
+func (e BreakerEvent) String() string {
+	switch e {
+	case BreakerTripped:
+		return "breaker is open"
+	case BreakerReset:
+		return "breaker is closed"
+	case BreakerFail:
+		return "Fail() was called"
+	case BreakerReady:
+		return "breaker is ready to retry"
+	default:
+		return "unknown event"
+	}
+}
+
 // ListenerEvent includes a reference to the circuit breaker and the event.
 type ListenerEvent struct {
 	CB    *Breaker
