@@ -71,7 +71,6 @@ const (
 
 var (
 	defaultInitialBackOffInterval = 500 * time.Millisecond
-	defaultBackoffMaxElapsedTime  = 0 * time.Second
 )
 
 // Error codes returned by Call
