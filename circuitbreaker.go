@@ -15,10 +15,8 @@
 // threshold. It does not matter how long it takes to reach the threshold, but the
 // failures do need to be consecutive.
 //
-//
 // When wrapping blocks of code with a Breaker's Call() function, a time out can be
 // specified. If the time out is reached, the breaker's Fail() function will be called.
-//
 //
 // Other types of circuit breakers can be easily built by creating a Breaker and
 // adding a custom TripFunc. A TripFunc is called when a Breaker Fail()s and receives
@@ -27,7 +25,6 @@
 //
 // The package also provides a wrapper around an http.Client that wraps all of
 // the http.Client functions with a Breaker.
-//
 package circuit
 
 import (
@@ -37,7 +34,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v5"
 	"github.com/facebookgo/clock"
 )
 
@@ -139,8 +136,6 @@ func NewBreakerWithOptions(options *Options) *Breaker {
 	if options.BackOff == nil {
 		b := backoff.NewExponentialBackOff()
 		b.InitialInterval = defaultInitialBackOffInterval
-		b.MaxElapsedTime = defaultBackoffMaxElapsedTime
-		b.Clock = options.Clock
 		b.Reset()
 		options.BackOff = b
 	}

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v5"
 	"github.com/facebookgo/clock"
 )
 
