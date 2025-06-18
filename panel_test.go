@@ -21,7 +21,7 @@ func TestPanelGet(t *testing.T) {
 		t.Errorf("Expected ok to be true")
 	}
 
-	a, ok = p.Get("missing")
+	_, _ = p.Get("missing")
 }
 
 func TestPanelAdd(t *testing.T) {
